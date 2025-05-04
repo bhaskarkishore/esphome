@@ -144,21 +144,35 @@ float ADCSensor::sample()
       .atten = ADC_ATTEN_DB_12,
       .bitwidth = ADC_BITWIDTH_DEFAULT,
   };
-  ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC1_CHAN0, &config));
+
+  // Select channel from pin config
+  // #define ADC1_CHAN0          ADC_CHANNEL_0    // GPIO0
+  // #define ADC1_CHAN1          ADC_CHANNEL_1    // GPIO1
+  // #define ADC1_CHAN2          ADC_CHANNEL_2    // GPIO2
+  // #define ADC1_CHAN3          ADC_CHANNEL_3    // GPIO3
+  // #define ADC1_CHAN4          ADC_CHANNEL_4    // GPIO4
+  // #define ADC1_CHAN5          ADC_CHANNEL_5    // GPIO5
+  // #define ADC1_CHAN6          ADC_CHANNEL_6    // GPIO6
+
+  adc_channel_t adc_channel = this->channel1_;
+  uint8_t pin = this->pin_->get_pin();
+  ESP_LOGI(TAG, "ADC%d Channel[%d] Pin: %d", ADC_UNIT_1 + 1, adc_channel, pin);
+
+  ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, adc_channel, &config));
   //ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC1_CHAN1, &config));
   
   //-------------ADC1 Calibration Init---------------//
   adc_cali_handle_t adc1_cali_chan0_handle = NULL;
   adc_cali_handle_t adc1_cali_chan1_handle = NULL;
-  bool do_calibration1_chan0 = adc_calibration_init(ADC_UNIT_1, ADC1_CHAN0, ADC_ATTEN, &adc1_cali_chan0_handle);
+  bool do_calibration1_chan0 = adc_calibration_init(ADC_UNIT_1, adc_channel, ADC_ATTEN, &adc1_cali_chan0_handle);
   //bool do_calibration1_chan1 = adc_calibration_init(ADC_UNIT_1, ADC1_CHAN1, ADC_ATTEN, &adc1_cali_chan1_handle);
   
-  adc_oneshot_read(adc1_handle, ADC1_CHAN0, &adc_raw[0][0]);
-  ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, ADC1_CHAN0, adc_raw[0][0]);
+  adc_oneshot_read(adc1_handle, adc_channel, &adc_raw[0][0]);
+  ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, adc_channel, adc_raw[0][0]);
   if (do_calibration1_chan0) {
       // Convert the ADC raw result into calibrated result
       ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw[0][0], &voltage[0][0]));
-      ESP_LOGI(TAG, "ADC%d Channel[%d] Calibrated Voltage: %d mV", ADC_UNIT_1 + 1, ADC1_CHAN0, voltage[0][0]);
+      ESP_LOGI(TAG, "ADC%d Channel[%d] Calibrated Voltage: %d mV", ADC_UNIT_1 + 1, adc_channel, voltage[0][0]);
   }
   
   /*
@@ -180,7 +194,7 @@ float ADCSensor::sample()
       adc_calibration_deinit(adc1_cali_chan1_handle);
   }
   */
-    uint32_t mv_scaled = voltage[0][0]; // ADC1_CHAN0
+    uint32_t mv_scaled = voltage[0][0]; // adc_channel
     //uint32_t mv_scaled = voltage[0][1]; // ADC1_CHAN1
     float result = (float)(mv_scaled) / 1000;
     return result;

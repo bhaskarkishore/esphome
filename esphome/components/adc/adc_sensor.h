@@ -36,6 +36,9 @@ static const adc_atten_t ADC_ATTEN_DB_12_COMPAT = ADC_ATTEN_DB_11;
 class ADCSensor : public sensor::Sensor, public PollingComponent, public voltage_sampler::VoltageSampler {
  public:
 #ifdef USE_ESP32
+  void set_channel1(adc_channel_t channel) {
+    this->channel1_ = channel;
+  }
 /*
   /// Set the attenuation for this pin. Only available on the ESP32.
   void set_attenuation(adc_atten_t attenuation) { this->attenuation_ = attenuation; }
@@ -89,8 +92,7 @@ class ADCSensor : public sensor::Sensor, public PollingComponent, public voltage
 #ifdef USE_ESP32
 
   //adc_atten_t attenuation_{ADC_ATTEN_DB_0};
-  //adc1_channel_t channel1_{ADC_CHANNEL_MAX};
-  //adc_channel_t channel1_{ADC_CHANNEL_MAX}; // TEST
+  adc_channel_t channel1_{ADC_CHANNEL_0};
 #ifdef USE_ADC2
   //adc2_channel_t channel2_{ADC_CHANNEL_MAX};
 #endif
