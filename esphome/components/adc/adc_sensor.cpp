@@ -33,32 +33,32 @@ static const char *const TAG = "adc";
 #define ADC1_CHAN6          ADC_CHANNEL_6    // GPIO6
 #endif
 
-#if (SOC_ADC_PERIPH_NUM >= 2) && !CONFIG_IDF_TARGET_ESP32C3
-/**
- * On ESP32C3, ADC2 is no longer supported, due to its HW limitation.
- * Search for errata on espressif website for more details.
- */
-#define USE_ADC2            1
-#endif
-
-#if USE_ADC2
-//ADC2 Channels
-#if CONFIG_IDF_TARGET_ESP32
-#define ADC2_CHAN0          ADC_CHANNEL_0
-#else
-#define ADC2_CHAN0          ADC_CHANNEL_0
-#endif
-#endif  //#if EXAMPLE_USE_ADC
-
 #define ADC_ATTEN           ADC_ATTEN_DB_12   // The input voltage of ADC will be attenuated extending the range of measurement by about 12 dB.
 
-static int adc_raw[2][10];
-static int voltage[2][10];
+
 static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle);
 static void adc_calibration_deinit(adc_cali_handle_t handle);
 
 void ADCSensor::setup() {
   ESP_LOGCONFIG(TAG, "Setting up ADC '%s'...", this->get_name().c_str());
+
+  // Create new oneshot ADC unit
+  adc_oneshot_unit_handle_t adc1_handle;
+  adc_oneshot_unit_init_cfg_t init_config1 = {
+      .unit_id = ADC_UNIT_1,                    // Selects the ADC
+      // .clk_src = 0,                             // Selects the source clock of the ADC. If set to 0, the driver will fall back to using a default clock source
+      .ulp_mode = ADC_ULP_MODE_DISABLE,         // Sets if the ADC will be working under ULP mode.
+  };
+  ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
+  
+  // Set ADC parameters
+  adc_oneshot_chan_cfg_t config = {
+      .atten = ADC_ATTEN,
+      .bitwidth = ADC_BITWIDTH_DEFAULT,
+  };
+
+  ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, this->channel1_, &config));
+  
   ESP_LOGCONFIG(TAG, "ADC '%s' setup finished!", this->get_name().c_str());
 }
 
@@ -97,22 +97,14 @@ void ADCSensor::dump_config() {
   */
 #endif  // USE_ESP32
 
-#ifdef USE_RP2040
-  if (this->is_temperature_) {
-    ESP_LOGCONFIG(TAG, "  Pin: Temperature");
-  } else {
-#ifdef USE_ADC_SENSOR_VCC
-    ESP_LOGCONFIG(TAG, "  Pin: VCC");
-#else
-    LOG_PIN("  Pin: ", this->pin_);
-#endif  // USE_ADC_SENSOR_VCC
-  }
-#endif  // USE_RP2040
   ESP_LOGCONFIG(TAG, "  Samples: %i", this->sample_count_);
   LOG_UPDATE_INTERVAL(this);
 }
 
-float ADCSensor::get_setup_priority() const { return setup_priority::DATA; }
+float ADCSensor::get_setup_priority() const {
+   return setup_priority::DATA;
+}
+
 void ADCSensor::update() {
   float value_v = this->sample();
   ESP_LOGV(TAG, "'%s': Got voltage=%.4fV", this->get_name().c_str(), value_v);
@@ -128,67 +120,40 @@ void ADCSensor::set_sample_count(uint8_t sample_count) {
 #ifdef USE_ESP32
 float ADCSensor::sample()
 {
+  int sum = 0;
+  int voltage = 0;
   
-  // https://github.com/espressif/esp-idf/blob/release/v5.2/components/hal/include/hal/adc_types.h
-  //-------------ADC1 Init---------------//
-  adc_oneshot_unit_handle_t adc1_handle;
-  adc_oneshot_unit_init_cfg_t init_config1 = {
-      .unit_id = ADC_UNIT_1,                    // Selects the ADC
-      //.clk_src = 0,                           // Selects the source clock of the ADC. If set to 0, the driver will fall back to using a default clock source
-      .ulp_mode = ADC_ULP_MODE_DISABLE,         // Sets if the ADC will be working under ULP mode.
-  };
-  ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config1, &adc1_handle));
+  // Read ADC raw values averaging depending on sample count
+  for (uint8_t sample = 0; sample < this->sample_count_; sample++) {
+    int raw = -1;
+    adc_oneshot_read(this->handle1_, this->channel1_, &raw);
+    if (raw == -1) {
+      return NAN;
+    }
+    sum += raw;
+  }
+  sum = (sum + (this->sample_count_ >> 1)) / this->sample_count_;  // NOLINT(clang-analyzer-core.DivideZero)
   
-  //-------------ADC1 Config---------------//
-  adc_oneshot_chan_cfg_t config = {
-      .atten = ADC_ATTEN_DB_12,
-      .bitwidth = ADC_BITWIDTH_DEFAULT,
-  };
+  ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, this->channel1_, sum);
 
-  // Set the ADC channel
-  adc_channel_t adc_channel = this->channel1_;
-  
-  ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, adc_channel, &config));
-  //ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC1_CHAN1, &config));
-  
-  //-------------ADC1 Calibration Init---------------//
-  adc_cali_handle_t adc1_cali_chan0_handle = NULL;
-  adc_cali_handle_t adc1_cali_chan1_handle = NULL;
-  bool do_calibration1_chan0 = adc_calibration_init(ADC_UNIT_1, adc_channel, ADC_ATTEN, &adc1_cali_chan0_handle);
-  //bool do_calibration1_chan1 = adc_calibration_init(ADC_UNIT_1, ADC1_CHAN1, ADC_ATTEN, &adc1_cali_chan1_handle);
-  
-  adc_oneshot_read(adc1_handle, adc_channel, &adc_raw[0][0]);
-  // ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, adc_channel, adc_raw[0][0]);
-  if (do_calibration1_chan0) {
+  // Calibrate the ADC channel  
+  bool is_calibrated = adc_calibration_init(ADC_UNIT_1, this->channel1_, ADC_ATTEN, &this->cali_handle_);
+
+  if (is_calibrated) {
       // Convert the ADC raw result into calibrated result
-      ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw[0][0], &voltage[0][0]));
-      // ESP_LOGI(TAG, "ADC%d Channel[%d] Calibrated Voltage: %d mV", ADC_UNIT_1 + 1, adc_channel, voltage[0][0]);
+      ESP_ERROR_CHECK(adc_cali_raw_to_voltage(this->cali_handle_, sum, &voltage));
+      ESP_LOGI(TAG, "ADC%d Channel[%d] Calibrated Voltage: %d mV", ADC_UNIT_1 + 1, this->channel1_, voltage);
   }
   
-  /*
-  ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC1_CHAN1, &adc_raw[0][1]));
-  ESP_LOGI(TAG, "ADC%d Channel[%d] Raw Data: %d", ADC_UNIT_1 + 1, ADC1_CHAN1, adc_raw[0][1]);
-  if (do_calibration1_chan1) {
-      // Convert the ADC raw result into calibrated result
-      ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan1_handle, adc_raw[0][1], &voltage[0][1]));
-      ESP_LOGI(TAG, "ADC%d Channel[%d] Calibrated Voltage: %d mV", ADC_UNIT_1 + 1, ADC1_CHAN1, voltage[0][1]);
+  // Free cali resources
+  if (is_calibrated) {
+      adc_calibration_deinit(this->cali_handle_);
   }
-  */
-  //Tear Down
-  ESP_ERROR_CHECK(adc_oneshot_del_unit(adc1_handle));
-  if (do_calibration1_chan0) {
-      adc_calibration_deinit(adc1_cali_chan0_handle);
-  }
-  /*
-  if (do_calibration1_chan1) {
-      adc_calibration_deinit(adc1_cali_chan1_handle);
-  }
-  */
-    uint32_t mv_scaled = voltage[0][0]; // adc_channel
-    //uint32_t mv_scaled = voltage[0][1]; // ADC1_CHAN1
-    float result = (float)(mv_scaled) / 1000;
-    return result;
-  }
+  
+  float result = (float)(voltage) / 1000;
+
+  return result;
+}
 
 /*---------------------------------------------------------------
         ADC Calibration
@@ -232,11 +197,11 @@ static bool adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_att
 
     *out_handle = handle;
     if (ret == ESP_OK) {
-        // ESP_LOGI(TAG, "Calibration Success");
+        ESP_LOGI(TAG, "Calibration Success, ADC%d Channel[%d]", unit + 1, channel);
     } else if (ret == ESP_ERR_NOT_SUPPORTED || !calibrated) {
-        ESP_LOGW(TAG, "eFuse not burnt, skip software calibration");
+        ESP_LOGI(TAG, "eFuse not burnt, skip software calibration, ADC%d Channel[%d]", unit + 1, channel);
     } else {
-        ESP_LOGE(TAG, "Invalid arg or no memory");
+        ESP_LOGI(TAG, "Invalid arg or no memory, ADC%d Channel[%d]", unit + 1, channel);
     }
 
     return calibrated;

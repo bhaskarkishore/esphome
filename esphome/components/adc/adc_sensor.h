@@ -42,20 +42,7 @@ class ADCSensor : public sensor::Sensor, public PollingComponent, public voltage
 /*
   /// Set the attenuation for this pin. Only available on the ESP32.
   void set_attenuation(adc_atten_t attenuation) { this->attenuation_ = attenuation; }
-  void set_channel1(adc1_channel_t channel) {
-    this->channel1_ = channel;
-
-//#ifdef USE_ADC2
-//    this->channel2_ = ADC_CHANNEL_MAX;
-  }
-
-  void set_channel2(adc2_channel_t channel) {
-    this->channel2_ = channel;
-    this->channel1_ = ADC_CHANNEL_MAX;
-#endif
-
-  }
-
+  
   void set_autorange(bool autorange) { this->autorange_ = autorange; }
 */
 #endif
@@ -72,38 +59,18 @@ class ADCSensor : public sensor::Sensor, public PollingComponent, public voltage
   void set_sample_count(uint8_t sample_count);
   float sample() override;
 
-#ifdef USE_ESP8266
-  std::string unique_id() override;
-#endif
-
-#ifdef USE_RP2040
-  void set_is_temperature() { this->is_temperature_ = true; }
-#endif
-
  protected:
   InternalGPIOPin *pin_;
   bool output_raw_{false};
   uint8_t sample_count_{1};
 
-#ifdef USE_RP2040
-  bool is_temperature_{false};
-#endif
-
 #ifdef USE_ESP32
-
   //adc_atten_t attenuation_{ADC_ATTEN_DB_0};
   adc_channel_t channel1_{ADC_CHANNEL_0};
-#ifdef USE_ADC2
-  //adc2_channel_t channel2_{ADC_CHANNEL_MAX};
-#endif
+  adc_oneshot_unit_handle_t handle1_;
+  adc_cali_handle_t cali_handle_{NULL};  
   bool autorange_{false};
-/*
-#if (ESP_IDF_VERSION_MAJOR >= 5 && ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(5, 2, 0))
-  esp_adc_cal_characteristics_t cal_characteristics_[SOC_ADC_ATTEN_NUM] = {};
-#else
-  esp_adc_cal_characteristics_t cal_characteristics_[ADC_ATTEN_MAX] = {};
-#endif
-*/
+
 #endif
 };
 
