@@ -19,14 +19,14 @@
 // State variables
 uint32_t slow_clk_period;
 uint64_t run_duration;
-volatile uint32_t prg_state = PRG_STATE_NONE;
+volatile uint8_t prg_state = PRG_STATE_NONE;
 uint8_t led_interval_counter = 0;
 
 // ina219 configuration variables
-uint32_t cfg_bus_enabled[MAX_BUS];
+uint8_t cfg_bus_enabled[MAX_BUS];
+uint8_t cfg_bus_address[MAX_BUS];
 float cfg_bus_max_voltage[MAX_BUS];
 float cfg_bus_max_current[MAX_BUS];
-uint32_t cfg_bus_address[MAX_BUS];
 float cfg_bus_shunt_resistance[MAX_BUS];
 float cfg_bus_current_clamp_threshold[MAX_BUS];
 uint32_t cfg_bus_calibration_register[MAX_BUS];
@@ -37,7 +37,7 @@ uint8_t cfg_led_interval = 10;
 // Output variables
 esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
 
-volatile uint32_t bus_reset[MAX_BUS] = {1, 1};
+volatile uint8_t bus_reset[MAX_BUS] = {1, 1};
 static uint64_t bus_last_sample_time[MAX_BUS] = {0, 0};
 
 volatile float bus_current_mah[MAX_BUS] = {0.f, 0.f};

@@ -54,22 +54,22 @@ static void lp_core_init(void) {
   ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
   // Set parameters
-  ((uint32_t *) &ulp_cfg_bus_enabled)[0] = 1;
+  ((uint8_t *) &ulp_cfg_bus_enabled)[0] = 1;
   ((float *) &ulp_cfg_bus_max_voltage)[0] = BUS_A_MAX_VOLTAGE;
   ((float *) &ulp_cfg_bus_max_current)[0] = BUS_A_MAX_CURRENT;
-  ((uint32_t *) &ulp_cfg_bus_address)[0] = BUS_A_ADDRESS;
+  ((uint8_t *) &ulp_cfg_bus_address)[0] = BUS_A_ADDRESS;
   ((float *) &ulp_cfg_bus_shunt_resistance)[0] = BUS_A_SHUNT_R;
   ((float *) &ulp_cfg_bus_current_clamp_threshold)[0] = BUS_A_CURRENT_CLAMP_THRESHOLD;
 
-  ((uint32_t *) &ulp_cfg_bus_enabled)[1] = 1;
+  ((uint8_t *) &ulp_cfg_bus_enabled)[1] = 1;
   ((float *) &ulp_cfg_bus_max_voltage)[1] = BUS_B_MAX_VOLTAGE;
   ((float *) &ulp_cfg_bus_max_current)[1] = BUS_B_MAX_CURRENT;
-  ((uint32_t *) &ulp_cfg_bus_address)[1] = BUS_B_ADDRESS;
+  ((uint8_t *) &ulp_cfg_bus_address)[1] = BUS_B_ADDRESS;
   ((float *) &ulp_cfg_bus_shunt_resistance)[1] = BUS_B_SHUNT_R;
   ((float *) &ulp_cfg_bus_current_clamp_threshold)[1] = BUS_B_CURRENT_CLAMP_THRESHOLD;
 
-  ((uint32_t *) &ulp_bus_reset)[0] = 1;
-  ((uint32_t *) &ulp_bus_reset)[1] = 1;
+  ((uint8_t *) &ulp_bus_reset)[0] = 1;
+  ((uint8_t *) &ulp_bus_reset)[1] = 1;
 
   ret = ulp_lp_core_run(&cfg);
   if (ret != ESP_OK) {

@@ -10,15 +10,15 @@
 #define INA219_REGISTER_CURRENT 0x04
 #define INA219_REGISTER_CALIBRATION 0x05
 
-esp_err_t ina219_init(uint16_t address, float max_voltage, float r_shunt, float max_current,
+esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float max_current,
                       uint32_t cfg_calibration_register, uint32_t *calibration_register, uint32_t *current_lsb);
 
-esp_err_t ina219_power_down(uint16_t address);
+esp_err_t ina219_power_down(uint8_t address);
 
-esp_err_t ina219_bus_voltage(uint16_t address, float *bus_voltage);
+esp_err_t ina219_bus_voltage(uint8_t address, float *bus_voltage);
 
-esp_err_t ina219_current(uint16_t address, float *current, uint32_t current_lsb);
+esp_err_t ina219_current(uint8_t address, float *current, uint32_t current_lsb);
 
-esp_err_t ina219_shunt_voltage(uint16_t address, float *shunt_voltage);
+esp_err_t ina219_shunt_voltage(uint8_t address, float *shunt_voltage);
 
-esp_err_t ina219_power(uint16_t address, float *power, uint32_t current_lsb);
+esp_err_t ina219_power(uint8_t address, float *power, uint32_t current_lsb);
