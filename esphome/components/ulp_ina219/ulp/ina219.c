@@ -26,7 +26,7 @@ esp_err_t ina219_init(uint16_t address, float max_voltage, float r_shunt, float 
   config |= 0b0000000001111000;
 
   // 16v range
-  // For higher voltages, adc precision will half
+  // For higher voltages, adc precision will halve
   if (max_voltage > 16.f) {
     config |= 0b0010000000000000;
   } else {

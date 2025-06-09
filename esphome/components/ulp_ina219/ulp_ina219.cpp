@@ -88,8 +88,8 @@ static void lp_i2c_init(void) {
   const lp_core_i2c_cfg_t i2c_cfg = {
       .i2c_pin_cfg =
           {
-              .sda_io_num = GPIO_NUM_6,  // Default SDA pin (GPIO 6)
-              .scl_io_num = GPIO_NUM_7,  // Default SCL pin (GPIO 7)
+              .sda_io_num = GPIO_NUM_6,  // Fixed SDA pin (see datasheet)
+              .scl_io_num = GPIO_NUM_7,  // Fixed SCL pin (see datasheet)
               .sda_pullup_en = true,     // Enable internal pullup for SDA
               .scl_pullup_en = true,     // Enable internal pullup for SCL
           },
@@ -151,6 +151,16 @@ void UlpIna219::update() {
       ESP_LOGW(TAG, "Failed to read current");
     }
   }
+
+  if (this->duration_sensor_ != nullptr) {
+    float duration = (float) ulp_run_duration / 1000;
+    if (!std::isnan(duration)) {
+      this->duration_sensor_->publish_state(duration);
+      ESP_LOGD(TAG, "Ulp Runtime: %.3f ms", duration);
+    } else {
+      ESP_LOGW(TAG, "Failed to read ulp runtime");
+    }
+  }
 }
 
 void UlpIna219::dump_config() {
@@ -162,6 +172,9 @@ void UlpIna219::dump_config() {
   }
   if (this->current_sensor_ != nullptr) {
     LOG_SENSOR("  ", "Current", this->current_sensor_);
+  }
+  if (this->duration_sensor_ != nullptr) {
+    LOG_SENSOR("  ", "Duration", this->duration_sensor_);
   }
 
   if (this->is_failed()) {

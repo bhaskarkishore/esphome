@@ -1,7 +1,7 @@
 
+#include "ulp_lp_core_gpio.h"
 #include "soc/lp_timer_reg.h"
 #include "soc/rtc.h"
-#include "ulp_lp_core_gpio.h"
 #include "ina219.h"
 
 // NOTE: All global types are uint32_t, application must handle casting
@@ -20,8 +20,9 @@
 uint32_t slow_clk_period;
 uint64_t run_duration;
 volatile uint32_t prg_state = PRG_STATE_NONE;
+uint8_t led_interval_counter = 0;
 
-// Configuration variables
+// ina219 configuration variables
 uint32_t cfg_bus_enabled[MAX_BUS];
 float cfg_bus_max_voltage[MAX_BUS];
 float cfg_bus_max_current[MAX_BUS];
@@ -29,6 +30,9 @@ uint32_t cfg_bus_address[MAX_BUS];
 float cfg_bus_shunt_resistance[MAX_BUS];
 float cfg_bus_current_clamp_threshold[MAX_BUS];
 uint32_t cfg_bus_calibration_register[MAX_BUS];
+
+// Other configuration variables
+uint8_t cfg_led_interval = 10;
 
 // Output variables
 esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
@@ -102,7 +106,7 @@ static void accumulate_current(uint32_t reset, float *accumulator, float previou
 
   if (reset) {
     // This ensures that the present sample is not lost
-    // when reset is called between sampling intervals.
+    // when reset is called.
     *accumulator = current_area;
   }
 
@@ -145,7 +149,8 @@ static void init() {
   esp_err_t ret = ESP_OK;
   uint32_t calibration_register = 0;
   uint32_t current_lsb = 0;
-  for (int i = 0; i < MAX_BUS; ++i) {
+
+  for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (cfg_bus_enabled[i]) {
       ret = ina219_init(cfg_bus_address[i], cfg_bus_max_voltage[i], cfg_bus_shunt_resistance[i], cfg_bus_max_current[i],
                         cfg_bus_calibration_register[i], &calibration_register, &current_lsb);
@@ -160,7 +165,7 @@ static void init() {
 }
 
 static void try_powerdown() {
-  for (int i = 0; i < MAX_BUS; ++i) {
+  for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (cfg_bus_enabled[i]) {
       ina219_power_down(cfg_bus_address[i]);
     }
@@ -168,18 +173,23 @@ static void try_powerdown() {
 }
 
 int main(void) {
-  uint64_t current = lp_core_get_rtc_ticks();
-  ulp_lp_core_gpio_set_level(LED, 1);
   prg_state = PRG_STATE_RUNNING;
+  uint64_t current = lp_core_get_rtc_ticks();
+
+  if (led_interval_counter >= cfg_led_interval) {
+    ulp_lp_core_gpio_set_level(LED, 1);
+    led_interval_counter = 0;
+  }
 
   init();
   process();
   try_powerdown();
 
-  prg_state = PRG_STATE_SLEEPING;
+  led_interval_counter++;
+  ulp_lp_core_gpio_set_level(LED, 0);
+
   run_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, slow_clk_period);
-  if (bus_error_code[0] == ESP_OK && bus_error_code[1] == ESP_OK) {
-    ulp_lp_core_gpio_set_level(LED, 0);
-  }
+  prg_state = PRG_STATE_SLEEPING;
+
   return 0;
 }

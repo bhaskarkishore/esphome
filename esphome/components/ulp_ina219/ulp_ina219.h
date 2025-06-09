@@ -15,10 +15,12 @@ class UlpIna219 : public PollingComponent {
 
   void set_voltage_sensor(sensor::Sensor *voltage_sensor) { voltage_sensor_ = voltage_sensor; }
   void set_current_sensor(sensor::Sensor *current_sensor) { current_sensor_ = current_sensor; }
+  void set_duration_sensor(sensor::Sensor *duration_sensor) { duration_sensor_ = duration_sensor; }
 
  protected:
   sensor::Sensor *voltage_sensor_{nullptr};
   sensor::Sensor *current_sensor_{nullptr};
+  sensor::Sensor *duration_sensor_{nullptr};
 
   float read_voltage();
   float read_current();

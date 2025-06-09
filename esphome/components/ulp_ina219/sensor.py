@@ -9,6 +9,7 @@ from esphome.const import (
     CONF_ID,
     CONF_VOLTAGE,
     DEVICE_CLASS_CURRENT,
+    DEVICE_CLASS_DURATION,
     DEVICE_CLASS_VOLTAGE,
     KEY_CORE,
     KEY_TARGET_PLATFORM,
@@ -16,11 +17,14 @@ from esphome.const import (
     PLATFORM_ESP32,
     STATE_CLASS_MEASUREMENT,
     UNIT_AMPERE,
+    UNIT_MILLISECOND,
     UNIT_VOLT,
 )
 from esphome.core import CORE
 
 DEPENDENCIES = ["esp32"]
+
+CONF_ULP_RUNTIME = "ulp_runtime"
 
 ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c"]
 
@@ -61,6 +65,12 @@ CONFIG_SCHEMA = cv.All(
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
+            cv.Optional(CONF_ULP_RUNTIME): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MILLISECOND,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_DURATION,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
             cv.Optional("update_interval", default="60s"): cv.update_interval,
         }
     ).extend(cv.polling_component_schema("60s")),
@@ -98,3 +108,7 @@ async def to_code(config):
     if CONF_CURRENT in config:
         current_sensor = await sensor.new_sensor(config[CONF_CURRENT])
         cg.add(var.set_current_sensor(current_sensor))
+
+    if CONF_ULP_RUNTIME in config:
+        duration_sensor = await sensor.new_sensor(config[CONF_ULP_RUNTIME])
+        cg.add(var.set_duration_sensor(duration_sensor))
