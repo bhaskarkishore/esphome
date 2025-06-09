@@ -22,7 +22,7 @@ from esphome.core import CORE
 
 DEPENDENCIES = ["esp32"]
 
-ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.c", "i2c.h"]
+ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c"]
 
 ulp_ina219_sensor_ns = cg.esphome_ns.namespace("ulp_ina219")
 
@@ -73,12 +73,12 @@ async def to_code(config):
     """Generate the component code"""
 
     esp32.add_extra_build_file(
-        "src/esphome/components/ulp_ina219/CMakeLists.txt",
+        "src/CMakeLists.txt",
         os.path.join(os.path.dirname(__file__), "CMakeLists.txt"),
     )
 
     for filename in ULP_FILES:
-        f = f"lp_core/{filename}"
+        f = f"ulp/{filename}"
         esp32.add_extra_build_file(
             f,
             os.path.join(os.path.dirname(__file__), f),

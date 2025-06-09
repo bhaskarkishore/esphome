@@ -1,9 +1,8 @@
 
 #include "soc/lp_timer_reg.h"
 #include "soc/rtc.h"
-#include "ina219.h"
-
 #include "ulp_lp_core_gpio.h"
+#include "ina219.h"
 
 // NOTE: All global types are uint32_t, application must handle casting
 
@@ -179,6 +178,8 @@ int main(void) {
 
   prg_state = PRG_STATE_SLEEPING;
   run_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, slow_clk_period);
-  ulp_lp_core_gpio_set_level(LED, 0);
+  if (bus_error_code[0] == ESP_OK && bus_error_code[1] == ESP_OK) {
+    ulp_lp_core_gpio_set_level(LED, 0);
+  }
   return 0;
 }

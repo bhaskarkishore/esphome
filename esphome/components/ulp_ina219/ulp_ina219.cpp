@@ -1,16 +1,21 @@
 
-
+#include <stdio.h>
+#include "esp_sleep.h"
+#include "ulp_main.h"
 #include "ulp_lp_core.h"
 #include "lp_core_i2c.h"
-#include "ulp_ina219.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "soc/rtc.h"
-#include "esp_sleep.h"
+#include "esp_timer.h"
+#include "driver/gpio.h"
 #include "driver/rtc_io.h"
-#include "lp_core_ina219.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
+#include "ulp_ina219.h"
 #include <cmath>
 
+#define LED_GREEN GPIO_NUM_2
 #define BUS_A_MAX_VOLTAGE 5.0f
 #define BUS_A_MAX_CURRENT 0.5f
 #define BUS_A_ADDRESS 0x40
@@ -23,16 +28,11 @@
 #define BUS_B_SHUNT_R 0.1f
 #define BUS_B_CURRENT_CLAMP_THRESHOLD 0.0005f
 
-#define LED_GREEN GPIO_NUM_2
-#define LED_BLUE GPIO_NUM_19
-#define LED_RED GPIO_NUM_18
-#define PERIPHERAL_SWITCH GPIO_NUM_14
-
 namespace esphome {
 namespace ulp_ina219 {
 
-extern const uint8_t lp_core_main_bin_start[] asm("_binary_lp_core_main_bin_start");
-extern const uint8_t lp_core_main_bin_end[] asm("_binary_lp_core_main_bin_end");
+extern const uint8_t lp_core_main_bin_start[] asm("_binary_ulp_main_bin_start");
+extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
 
 static void lp_core_init(void) {
   esp_err_t ret = ESP_OK;
@@ -85,22 +85,20 @@ static void lp_i2c_init(void) {
   esp_err_t ret = ESP_OK;
 
   /* Initialize LP I2C with default configuration */
-  // const lp_core_i2c_cfg_t i2c_cfg = LP_CORE_I2C_DEFAULT_CONFIG();
-
-  lp_core_i2c_cfg_t i2c_cfg = {};
-
-  // GPIO configuration
-  i2c_cfg.i2c_pin_cfg.sda_io_num = GPIO_NUM_6;
-  i2c_cfg.i2c_pin_cfg.scl_io_num = GPIO_NUM_7;
-  i2c_cfg.i2c_pin_cfg.sda_pullup_en = true;
-  i2c_cfg.i2c_pin_cfg.scl_pullup_en = true;
-
-  // Timing configuration
-  i2c_cfg.i2c_timing_cfg.clk_speed_hz = 100000;  // 100kHz
-
-  // Source clock configuration
-  i2c_cfg.i2c_src_clk = LP_I2C_SCLK_DEFAULT;
-
+  const lp_core_i2c_cfg_t i2c_cfg = {
+      .i2c_pin_cfg =
+          {
+              .sda_io_num = GPIO_NUM_6,  // Default SDA pin (GPIO 6)
+              .scl_io_num = GPIO_NUM_7,  // Default SCL pin (GPIO 7)
+              .sda_pullup_en = true,     // Enable internal pullup for SDA
+              .scl_pullup_en = true,     // Enable internal pullup for SCL
+          },
+      .i2c_timing_cfg =
+          {
+              .clk_speed_hz = 100000,  // 100 kHz (standard I2C speed)
+          },
+      .i2c_src_clk = LP_I2C_SCLK_DEFAULT,  // Default LP I2C source clock
+  };
   ret = lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg);
   if (ret != ESP_OK) {
     printf("LP I2C init failed\n");
@@ -114,7 +112,6 @@ static const char *const TAG = "ulp_219";
 
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Setting up Custom Sensor...");
-
   lp_i2c_init();
   lp_core_init();
 
@@ -133,6 +130,8 @@ void UlpIna219::setup() {
 void UlpIna219::update() {
   ESP_LOGD(TAG, "Updating sensor readings...");
 
+  ESP_LOGD(TAG, "Bus Errors 0:%d, 1:%d", ((esp_err_t *) &ulp_bus_error_code)[0],
+           ((esp_err_t *) &ulp_bus_error_code)[1]);
   if (this->voltage_sensor_ != nullptr) {
     float voltage = this->read_voltage();
     if (!std::isnan(voltage)) {
@@ -171,18 +170,8 @@ void UlpIna219::dump_config() {
 }
 
 float UlpIna219::read_voltage() {
-  // Implement your voltage reading logic here
-  // This is a placeholder implementation
-
-  // Example: Read from ADC or I2C sensor
-  // Replace with actual hardware interface code
-
-  // Simulated voltage reading for demonstration
-  static uint32_t counter = 0;
-  counter++;
-
-  // Return a simulated voltage value (replace with actual reading)
-  return 3.3f + (sin(counter * 0.1f) * 0.5f);
+  float voltage = ((float *) &ulp_bus_voltage)[0];
+  return voltage;
 }
 
 float UlpIna219::read_current() {
@@ -193,11 +182,8 @@ float UlpIna219::read_current() {
   // Replace with actual hardware interface code
 
   // Simulated current reading for demonstration
-  static uint32_t counter = 0;
-  counter += 2;
-
-  // Return a simulated current value (replace with actual reading)
-  return 0.5f + (cos(counter * 0.05f) * 0.2f);
+  float current = ((float *) &ulp_bus_current)[0];
+  return current;
 }
 
 }  // namespace ulp_ina219
