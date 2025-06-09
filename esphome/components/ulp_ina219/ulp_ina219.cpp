@@ -95,7 +95,7 @@ static void lp_i2c_init(void) {
           },
       .i2c_timing_cfg =
           {
-              .clk_speed_hz = 100000,  // 100 kHz (standard I2C speed)
+              .clk_speed_hz = 400000,  // 100 kHz (standard I2C speed)
           },
       .i2c_src_clk = LP_I2C_SCLK_DEFAULT,  // Default LP I2C source clock
   };
