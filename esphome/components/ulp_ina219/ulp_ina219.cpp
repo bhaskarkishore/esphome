@@ -60,6 +60,7 @@ static void lp_core_init(void) {
   ((uint8_t *) &ulp_cfg_bus_address)[0] = BUS_A_ADDRESS;
   ((float *) &ulp_cfg_bus_shunt_resistance)[0] = BUS_A_SHUNT_R;
   ((float *) &ulp_cfg_bus_current_clamp_threshold)[0] = BUS_A_CURRENT_CLAMP_THRESHOLD;
+  ((float *) &ulp_cfg_bus_power_clamp_threshold)[0] = 0;
 
   ((uint8_t *) &ulp_cfg_bus_enabled)[1] = 1;
   ((float *) &ulp_cfg_bus_max_voltage)[1] = BUS_B_MAX_VOLTAGE;
@@ -67,6 +68,7 @@ static void lp_core_init(void) {
   ((uint8_t *) &ulp_cfg_bus_address)[1] = BUS_B_ADDRESS;
   ((float *) &ulp_cfg_bus_shunt_resistance)[1] = BUS_B_SHUNT_R;
   ((float *) &ulp_cfg_bus_current_clamp_threshold)[1] = BUS_B_CURRENT_CLAMP_THRESHOLD;
+  ((float *) &ulp_cfg_bus_power_clamp_threshold)[1] = 0;
 
   ((uint8_t *) &ulp_bus_reset)[0] = 1;
   ((uint8_t *) &ulp_bus_reset)[1] = 1;
@@ -133,33 +135,45 @@ void UlpIna219::update() {
   ESP_LOGD(TAG, "Bus Errors 0:%d, 1:%d", ((esp_err_t *) &ulp_bus_error_code)[0],
            ((esp_err_t *) &ulp_bus_error_code)[1]);
   if (this->voltage_sensor_ != nullptr) {
-    float voltage = this->read_voltage();
-    if (!std::isnan(voltage)) {
-      this->voltage_sensor_->publish_state(voltage);
-      ESP_LOGD(TAG, "Voltage: %.2f V", voltage);
-    } else {
-      ESP_LOGW(TAG, "Failed to read voltage");
-    }
+    float voltage = ((float *) &ulp_bus_voltage)[0];
+    this->voltage_sensor_->publish_state(voltage);
+    ESP_LOGD(TAG, "Voltage: %.2f V", voltage);
   }
 
   if (this->current_sensor_ != nullptr) {
-    float current = this->read_current();
-    if (!std::isnan(current)) {
-      this->current_sensor_->publish_state(current);
-      ESP_LOGD(TAG, "Current: %.3f A", current);
-    } else {
-      ESP_LOGW(TAG, "Failed to read current");
-    }
+    float current = ((float *) &ulp_bus_current)[0];
+    this->current_sensor_->publish_state(current);
+    ESP_LOGD(TAG, "Current: %.3f A", current);
+  }
+
+  if (this->power_sensor_ != nullptr) {
+    float power = ((float *) &ulp_bus_power)[0];
+    this->power_sensor_->publish_state(power);
+    ESP_LOGD(TAG, "Power: %.3f W", power);
+  }
+
+  if (this->shunt_voltage_sensor_ != nullptr) {
+    float shunt_voltage = ((float *) &ulp_bus_shunt_voltage)[0];
+    this->shunt_voltage_sensor_->publish_state(shunt_voltage);
+    ESP_LOGD(TAG, "Shunt Voltage: %.3f V", shunt_voltage);
+  }
+
+  if (this->energy_sensor_ != nullptr) {
+    float energy = ((float *) &ulp_bus_energy)[0];
+    this->energy_sensor_->publish_state(energy);
+    ESP_LOGD(TAG, "Energy: %.3f Wh", energy);
+  }
+
+  if (this->charge_sensor_ != nullptr) {
+    float charge = ((float *) &ulp_bus_charge)[0];
+    this->charge_sensor_->publish_state(charge);
+    ESP_LOGD(TAG, "charge: %.3f Ah", charge);
   }
 
   if (this->duration_sensor_ != nullptr) {
     float duration = (float) ulp_run_duration / 1000;
-    if (!std::isnan(duration)) {
-      this->duration_sensor_->publish_state(duration);
-      ESP_LOGD(TAG, "Ulp Runtime: %.3f ms", duration);
-    } else {
-      ESP_LOGW(TAG, "Failed to read ulp runtime");
-    }
+    this->duration_sensor_->publish_state(duration);
+    ESP_LOGD(TAG, "Ulp Runtime: %.3f ms", duration);
   }
 }
 
@@ -180,23 +194,6 @@ void UlpIna219::dump_config() {
   if (this->is_failed()) {
     ESP_LOGE(TAG, "Component setup failed!");
   }
-}
-
-float UlpIna219::read_voltage() {
-  float voltage = ((float *) &ulp_bus_voltage)[0];
-  return voltage;
-}
-
-float UlpIna219::read_current() {
-  // Implement your current reading logic here
-  // This is a placeholder implementation
-
-  // Example: Read from current sensor via ADC or I2C
-  // Replace with actual hardware interface code
-
-  // Simulated current reading for demonstration
-  float current = ((float *) &ulp_bus_current)[0];
-  return current;
 }
 
 }  // namespace ulp_ina219

@@ -29,6 +29,7 @@ float cfg_bus_max_voltage[MAX_BUS];
 float cfg_bus_max_current[MAX_BUS];
 float cfg_bus_shunt_resistance[MAX_BUS];
 float cfg_bus_current_clamp_threshold[MAX_BUS];
+float cfg_bus_power_clamp_threshold[MAX_BUS];
 uint32_t cfg_bus_calibration_register[MAX_BUS];
 
 // Other configuration variables
@@ -40,7 +41,8 @@ esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
 volatile uint8_t bus_reset[MAX_BUS] = {1, 1};
 static uint64_t bus_last_sample_time[MAX_BUS] = {0, 0};
 
-volatile float bus_current_mah[MAX_BUS] = {0.f, 0.f};
+volatile float bus_charge[MAX_BUS] = {0.f, 0.f};  // in Ah
+volatile float bus_energy[MAX_BUS] = {0.f, 0.f};  // in Wh
 
 volatile uint32_t bus_calibration_register[MAX_BUS] = {0, 0};
 volatile uint32_t bus_current_lsb[MAX_BUS] = {0, 0};
@@ -92,22 +94,27 @@ static uint64_t lp_core_rtc_ticks_to_us(uint64_t ticks, uint64_t period) {
   return (ticks * period) >> RTC_CLK_CAL_FRACT;
 }
 
-static void accumulate_current(uint32_t reset, float *accumulator, float previous_current, float sampled_current,
-                               float clamp_threshold, uint64_t *last_sample_time) {
-  sampled_current = clamp(sampled_current, clamp_threshold);
+static void accumulate(uint32_t reset, float *acc_charge, float previous_current, float sampled_current,
+                       float *acc_energy, float previous_power, float sampled_power, float current_clamp_threshold,
+                       float power_clamp_threshold, uint64_t *last_sample_time) {
+  sampled_current = clamp(sampled_current, current_clamp_threshold);
+  sampled_power = clamp(sampled_power, power_clamp_threshold);
   uint64_t current_time = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), slow_clk_period);
   float time_delta_hours = (current_time - *last_sample_time) / 3600000000.0f;
 
-  float current_area = 0.f;
+  float charge = 0.f, energy = 0.f;
   if (*last_sample_time != 0 && current_time > *last_sample_time) {
-    current_area = ((sampled_current + previous_current) / 2.0f) * time_delta_hours;
-    *accumulator += current_area;
+    charge = ((sampled_current + previous_current) / 2.0f) * time_delta_hours;
+    energy = ((sampled_power + previous_power) / 2.0f) * time_delta_hours;
+    *acc_energy += energy;
+    *acc_charge += charge;
   }
 
   if (reset) {
     // This ensures that the present sample is not lost
     // when reset is called.
-    *accumulator = current_area;
+    *acc_energy = energy;
+    *acc_charge = charge;
   }
 
   *last_sample_time = current_time;
@@ -119,10 +126,11 @@ static void process() {
   // ms more.
   ulp_lp_core_delay_us(SAMPLING_DELAY_WAIT);
 
-  float previous_current = 0.f;
+  float previous_current = 0.f, previous_power = 0.f;
   for (int i = 0; i < MAX_BUS; ++i) {
     if (cfg_bus_enabled[i] && bus_error_code[i] == ESP_OK) {
       previous_current = bus_current[i];
+      previous_power = bus_power[i];
 
       // Sample sensor
       ina219_bus_voltage(cfg_bus_address[i], &bus_voltage[i]);
@@ -135,9 +143,10 @@ static void process() {
       min_max(bus_power[i], &bus_power_min[i], &bus_power_max[i], bus_reset[i]);
       min_max(bus_voltage[i], &bus_voltage_min[i], &bus_voltage_max[i], bus_reset[i]);
 
-      // Accumulate current
-      accumulate_current(bus_reset[i], &bus_current_mah[i], previous_current, bus_current[i],
-                         cfg_bus_current_clamp_threshold[i], &bus_last_sample_time[i]);
+      // Accumulate current and energy
+      accumulate(bus_reset[i], &bus_charge[i], previous_current, bus_current[i], &bus_energy[i], previous_power,
+                 bus_power[i], cfg_bus_current_clamp_threshold[i], cfg_bus_power_clamp_threshold[i],
+                 &bus_last_sample_time[i]);
 
       // Clear reset if set
       bus_reset[i] = 0;

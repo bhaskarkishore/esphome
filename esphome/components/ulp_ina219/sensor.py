@@ -5,26 +5,38 @@ from esphome.components import esp32, sensor
 from esphome.components.esp32.const import VARIANT_ESP32C6, VARIANT_ESP32H2
 import esphome.config_validation as cv
 from esphome.const import (
-    CONF_CURRENT,
     CONF_ID,
-    CONF_VOLTAGE,
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_DURATION,
+    DEVICE_CLASS_ENERGY,
+    DEVICE_CLASS_POWER,
     DEVICE_CLASS_VOLTAGE,
     KEY_CORE,
     KEY_TARGET_PLATFORM,
     KEY_VARIANT,
     PLATFORM_ESP32,
     STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL,
     UNIT_AMPERE,
     UNIT_MILLISECOND,
     UNIT_VOLT,
+    UNIT_WATT,
+    UNIT_WATT_HOURS,
 )
 from esphome.core import CORE
 
-DEPENDENCIES = ["esp32"]
+from .const import (
+    CONF_BUS_A_CHARGE,
+    CONF_BUS_A_CURRENT,
+    CONF_BUS_A_ENERGY,
+    CONF_BUS_A_POWER,
+    CONF_BUS_A_SHUNT_VOLTAGE,
+    CONF_BUS_A_VOLTAGE,
+    CONF_ULP_RUNTIME,
+    UNIT_AMPS_HOURS,
+)
 
-CONF_ULP_RUNTIME = "ulp_runtime"
+DEPENDENCIES = ["esp32"]
 
 ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c"]
 
@@ -53,17 +65,40 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(UlpIna219SensorComponent),
-            cv.Required(CONF_VOLTAGE): sensor.sensor_schema(
+            cv.Required(CONF_BUS_A_VOLTAGE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_VOLT,
-                accuracy_decimals=2,
+                accuracy_decimals=3,
                 device_class=DEVICE_CLASS_VOLTAGE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_CURRENT): sensor.sensor_schema(
+            cv.Optional(CONF_BUS_A_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_BUS_A_POWER): sensor.sensor_schema(
+                unit_of_measurement=UNIT_WATT,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_POWER,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_BUS_A_SHUNT_VOLTAGE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_VOLT,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_BUS_A_CHARGE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_AMPS_HOURS,
+                accuracy_decimals=4,
+                state_class=STATE_CLASS_TOTAL,
+            ),
+            cv.Optional(CONF_BUS_A_ENERGY): sensor.sensor_schema(
+                unit_of_measurement=UNIT_WATT_HOURS,
+                accuracy_decimals=4,
+                device_class=DEVICE_CLASS_ENERGY,
+                state_class=STATE_CLASS_TOTAL,
             ),
             cv.Optional(CONF_ULP_RUNTIME): sensor.sensor_schema(
                 unit_of_measurement=UNIT_MILLISECOND,
@@ -74,7 +109,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("update_interval", default="60s"): cv.update_interval,
         }
     ).extend(cv.polling_component_schema("60s")),
-    cv.has_at_least_one_key(CONF_VOLTAGE, CONF_CURRENT),
+    cv.has_at_least_one_key(CONF_BUS_A_VOLTAGE),
     validate_chip_variant,
 )
 
@@ -101,14 +136,30 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    if CONF_VOLTAGE in config:
-        voltage_sensor = await sensor.new_sensor(config[CONF_VOLTAGE])
-        cg.add(var.set_voltage_sensor(voltage_sensor))
+    if CONF_BUS_A_VOLTAGE in config:
+        voltage_sensor = await sensor.new_sensor(config[CONF_BUS_A_VOLTAGE])
+        cg.add(var.set_voltage_sensor(0, voltage_sensor))
 
-    if CONF_CURRENT in config:
-        current_sensor = await sensor.new_sensor(config[CONF_CURRENT])
-        cg.add(var.set_current_sensor(current_sensor))
+    if CONF_BUS_A_CURRENT in config:
+        current_sensor = await sensor.new_sensor(config[CONF_BUS_A_CURRENT])
+        cg.add(var.set_current_sensor(0, current_sensor))
+
+    if CONF_BUS_A_POWER in config:
+        power_sensor = await sensor.new_sensor(config[CONF_BUS_A_POWER])
+        cg.add(var.set_power_sensor(0, power_sensor))
+
+    if CONF_BUS_A_ENERGY in config:
+        energy_sensor = await sensor.new_sensor(config[CONF_BUS_A_ENERGY])
+        cg.add(var.set_energy_sensor(0, energy_sensor))
+
+    if CONF_BUS_A_CHARGE in config:
+        charge_sensor = await sensor.new_sensor(config[CONF_BUS_A_CHARGE])
+        cg.add(var.set_charge_sensor(0, charge_sensor))
+
+    if CONF_BUS_A_SHUNT_VOLTAGE in config:
+        shunt_voltage_sensor = await sensor.new_sensor(config[CONF_BUS_A_SHUNT_VOLTAGE])
+        cg.add(var.set_shunt_voltage_sensor(0, shunt_voltage_sensor))
 
     if CONF_ULP_RUNTIME in config:
         duration_sensor = await sensor.new_sensor(config[CONF_ULP_RUNTIME])
-        cg.add(var.set_duration_sensor(duration_sensor))
+        cg.add(var.set_duration_sensor(0, duration_sensor))
