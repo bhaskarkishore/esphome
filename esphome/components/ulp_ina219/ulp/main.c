@@ -61,6 +61,8 @@ volatile float bus_current_max[MAX_BUS] = {0.f, 0.f};
 volatile float bus_power_min[MAX_BUS] = {0.f, 0.f};
 volatile float bus_power_max[MAX_BUS] = {0.f, 0.f};
 
+volatile uint32_t debug_a;
+
 static float clamp(float value, float threshold) {
   float v = value < 0.0f ? -value : value;
   if (v <= threshold) {

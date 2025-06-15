@@ -25,6 +25,7 @@ static const char *const TAG = "ulp_219";
 
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Setting up ULP INA219...");
+
   esp_err_t ret = this->lp_i2c_init();
   if (ret != ESP_OK) {
     this->mark_failed("Unable to initialize ulp i2c");
@@ -56,7 +57,7 @@ esp_err_t UlpIna219::lp_core_init(void) {
 
   ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
-  for (uint8_t i; i < UlpIna219::MAX_BUSES; ++i) {
+  for (uint8_t i = 0; i < MAX_BUSES; ++i) {
     ESP_LOGD(TAG, "Bus %c enabled: %d", i == 0 ? 'A' : 'B', this->bus_enabled_[i]);
     if (this->bus_enabled_[i]) {
       ((uint8_t *) &ulp_cfg_bus_enabled)[i] = 1;
@@ -105,93 +106,81 @@ esp_err_t UlpIna219::lp_i2c_init(void) {
 }
 
 void UlpIna219::update() {
-  ESP_LOGD(TAG, "Bus Errors 0:%d, 1:%d", ((esp_err_t *) &ulp_bus_error_code)[0],
-           ((esp_err_t *) &ulp_bus_error_code)[1]);
+  for (uint8_t i = 0; i < MAX_BUSES; ++i) {
+    if (!this->bus_enabled_[i])
+      continue;
 
-  for (uint8_t i; i < UlpIna219::MAX_BUSES; ++i) {
-    if (((esp_err_t *) &ulp_bus_error_code)[i] != ESP_OK) {
+    esp_err_t bus_error_code = ((esp_err_t *) &ulp_bus_error_code)[i];
+
+    if (bus_error_code != ESP_OK) {
+      ESP_LOGD(TAG, "Bus %c has errors, code: %u", i == 0 ? 'A' : 'B', bus_error_code);
       continue;
     }
-
-    ESP_LOGD(TAG, "Bus %c :", i == 0 ? 'A' : 'B');
 
     if (this->voltage_sensor_[i] != nullptr) {
       float voltage = ((float *) &ulp_bus_voltage)[i];
       this->voltage_sensor_[i]->publish_state(voltage);
-      ESP_LOGD(TAG, "Voltage: %.2f V", voltage);
     }
 
     if (this->current_sensor_[i] != nullptr) {
       float current = ((float *) &ulp_bus_current)[i];
       this->current_sensor_[i]->publish_state(current);
-      ESP_LOGD(TAG, "Current: %.3f A", current);
     }
 
     if (this->power_sensor_[i] != nullptr) {
       float power = ((float *) &ulp_bus_power)[i];
       this->power_sensor_[i]->publish_state(power);
-      ESP_LOGD(TAG, "Power: %.3f W", power);
     }
 
     if (this->shunt_voltage_sensor_[i] != nullptr) {
       float shunt_voltage = ((float *) &ulp_bus_shunt_voltage)[i];
       this->shunt_voltage_sensor_[i]->publish_state(shunt_voltage);
-      ESP_LOGD(TAG, "Shunt Voltage: %.3f V", shunt_voltage);
     }
 
     if (this->energy_sensor_[i] != nullptr) {
       float energy = ((float *) &ulp_bus_energy)[i];
       this->energy_sensor_[i]->publish_state(energy);
-      ESP_LOGD(TAG, "Energy: %.3f Wh", energy);
     }
 
     if (this->charge_sensor_[i] != nullptr) {
       float charge = ((float *) &ulp_bus_charge)[i];
       this->charge_sensor_[i]->publish_state(charge);
-      ESP_LOGD(TAG, "Charge: %.3f Ah", charge);
     }
 
     if (this->voltage_max_sensor_[i] != nullptr) {
       float vmax = ((float *) &ulp_bus_voltage_max)[i];
       this->voltage_max_sensor_[i]->publish_state(vmax);
-      ESP_LOGD(TAG, "Voltage (Max): %.3f V", vmax);
     }
 
     if (this->voltage_min_sensor_[i] != nullptr) {
       float vmin = ((float *) &ulp_bus_voltage_min)[i];
       this->voltage_min_sensor_[i]->publish_state(vmin);
-      ESP_LOGD(TAG, "Voltage (Min): %.3f V", vmin);
     }
 
     if (this->current_max_sensor_[i] != nullptr) {
       float cmax = ((float *) &ulp_bus_current_max)[i];
-      this->current_min_sensor_[i]->publish_state(cmax);
-      ESP_LOGD(TAG, "Current (Max): %.3f A", cmax);
+      this->current_max_sensor_[i]->publish_state(cmax);
     }
 
     if (this->current_min_sensor_[i] != nullptr) {
       float cmin = ((float *) &ulp_bus_current_min)[i];
       this->current_min_sensor_[i]->publish_state(cmin);
-      ESP_LOGD(TAG, "Current (Min): %.3f A", cmin);
     }
 
     if (this->power_max_sensor_[i] != nullptr) {
       float cmax = ((float *) &ulp_bus_power_max)[i];
-      this->power_min_sensor_[i]->publish_state(cmax);
-      ESP_LOGD(TAG, "Power (Max): %.3f W", cmax);
+      this->power_max_sensor_[i]->publish_state(cmax);
     }
 
     if (this->power_min_sensor_[i] != nullptr) {
       float cmin = ((float *) &ulp_bus_power_min)[i];
       this->power_min_sensor_[i]->publish_state(cmin);
-      ESP_LOGD(TAG, "Power (Min): %.3f W", cmin);
     }
   }
 
   if (this->ulp_run_duration_sensor_ != nullptr) {
     float duration = (float) ulp_run_duration / 1000;
     this->ulp_run_duration_sensor_->publish_state(duration);
-    ESP_LOGD(TAG, "Ulp Runtime: %.3f ms", duration);
   }
 }
 

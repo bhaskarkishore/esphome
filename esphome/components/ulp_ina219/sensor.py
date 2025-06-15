@@ -2,7 +2,7 @@ import os
 
 import esphome.codegen as cg
 from esphome.components import esp32, sensor
-from esphome.components.esp32.const import VARIANT_ESP32C6, VARIANT_ESP32H2
+from esphome.components.esp32 import VARIANT_ESP32C6, VARIANT_ESP32H2, only_on_variant
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_ADDRESS,
@@ -20,10 +20,6 @@ from esphome.const import (
     DEVICE_CLASS_ENERGY,
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_VOLTAGE,
-    KEY_CORE,
-    KEY_TARGET_PLATFORM,
-    KEY_VARIANT,
-    PLATFORM_ESP32,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL,
     UNIT_AMPERE,
@@ -32,7 +28,6 @@ from esphome.const import (
     UNIT_WATT,
     UNIT_WATT_HOURS,
 )
-from esphome.core import CORE
 
 from .const import (
     CONF_BUS_A,
@@ -58,22 +53,7 @@ ulp_ina219_sensor_ns = cg.esphome_ns.namespace("ulp_ina219")
 
 UlpIna219SensorComponent = ulp_ina219_sensor_ns.class_("UlpIna219", cg.PollingComponent)
 
-SUPPORTED_CHIPS = [VARIANT_ESP32C6, VARIANT_ESP32H2]
-
-
-def validate_chip_variant(config):
-    """Validate that the current chip is supported"""
-    if CORE.data[KEY_CORE][KEY_TARGET_PLATFORM] != PLATFORM_ESP32:
-        raise cv.Invalid("This component only supports ESP32 platform")
-
-    chip_variant = CORE.data[PLATFORM_ESP32].get(KEY_VARIANT, "").upper()
-    if chip_variant not in SUPPORTED_CHIPS:
-        raise cv.Invalid(
-            f"This component only supports {', '.join(SUPPORTED_CHIPS)} chips. Current chip: {chip_variant}"
-        )
-
-    return config
-
+SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32H2]
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -97,7 +77,7 @@ CONFIG_SCHEMA = cv.Schema(
 
 SENSOR_SCHEMA = cv.Schema(
     {
-        cv.Required(CONF_CURRENT): sensor.sensor_schema(
+        cv.Optional(CONF_CURRENT): sensor.sensor_schema(
             unit_of_measurement=UNIT_AMPERE,
             accuracy_decimals=3,
             device_class=DEVICE_CLASS_CURRENT,
@@ -132,7 +112,7 @@ SENSOR_SCHEMA = cv.Schema(
             device_class=DEVICE_CLASS_ENERGY,
             state_class=STATE_CLASS_TOTAL,
         ),
-        cv.Required(CONF_CURRENT_MIN): sensor.sensor_schema(
+        cv.Optional(CONF_CURRENT_MIN): sensor.sensor_schema(
             unit_of_measurement=UNIT_AMPERE,
             accuracy_decimals=3,
             device_class=DEVICE_CLASS_CURRENT,
@@ -150,7 +130,7 @@ SENSOR_SCHEMA = cv.Schema(
             device_class=DEVICE_CLASS_POWER,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
-        cv.Required(CONF_CURRENT_MAX): sensor.sensor_schema(
+        cv.Optional(CONF_CURRENT_MAX): sensor.sensor_schema(
             unit_of_measurement=UNIT_AMPERE,
             accuracy_decimals=3,
             device_class=DEVICE_CLASS_CURRENT,
@@ -196,7 +176,7 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(): cv.declare_id(UlpIna219SensorComponent),
             cv.Optional("update_interval", default="60s"): cv.update_interval,
-            cv.Required(CONF_BUS_A): BUS_SCHEMA_A,
+            cv.Optional(CONF_BUS_A): BUS_SCHEMA_A,
             cv.Optional(CONF_BUS_B): BUS_SCHEMA_B,
             cv.Optional(CONF_ULP_RUNTIME): sensor.sensor_schema(
                 unit_of_measurement=UNIT_MILLISECOND,
@@ -207,7 +187,8 @@ CONFIG_SCHEMA = cv.All(
         }
     ).extend(cv.polling_component_schema("60s")),
     cv.has_at_least_one_key(CONF_BUS_A),
-    validate_chip_variant,
+    cv.only_with_esp_idf,
+    only_on_variant(supported=SUPPORTED_VARIANTS),
 )
 
 

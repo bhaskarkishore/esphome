@@ -6,9 +6,10 @@
 namespace esphome {
 namespace ulp_ina219 {
 
+#define MAX_BUSES 2
+
 class UlpIna219 : public PollingComponent {
  public:
-  static const uint8_t MAX_BUSES = 2;
   void setup() override;
   void update() override;
   void dump_config() override;
@@ -126,8 +127,8 @@ class UlpIna219 : public PollingComponent {
   }
 
   void set_bus_enabled(uint8_t bus_idx) {
-    if (bus_idx < MAX_BUSES)
-      bus_enabled_[bus_idx] = true;
+    // if (bus_idx < MAX_BUSES)
+    bus_enabled_[bus_idx] = true;
   }
 
  protected:
