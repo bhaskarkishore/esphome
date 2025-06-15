@@ -8,34 +8,154 @@ namespace ulp_ina219 {
 
 class UlpIna219 : public PollingComponent {
  public:
+  static const uint8_t MAX_BUSES = 2;
   void setup() override;
   void update() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
 
-  void set_voltage_sensor(uint8_t bus_idx, sensor::Sensor *voltage_sensor) { voltage_sensor_ = voltage_sensor; }
-  void set_current_sensor(uint8_t bus_idx, sensor::Sensor *current_sensor) { current_sensor_ = current_sensor; }
-  void set_shunt_voltage_sensor(uint8_t bus_idx, sensor::Sensor *shunt_voltage_sensor) {
-    shunt_voltage_sensor_ = shunt_voltage_sensor;
+  void set_voltage_sensor(uint8_t bus_idx, sensor::Sensor *voltage_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      voltage_sensor_[bus_idx] = voltage_sensor;
+    }
   }
-  void set_power_sensor(uint8_t bus_idx, sensor::Sensor *power_sensor) { power_sensor_ = power_sensor; }
-  void set_charge_sensor(uint8_t bus_idx, sensor::Sensor *charge_sensor) { charge_sensor_ = charge_sensor; }
-  void set_energy_sensor(uint8_t bus_idx, sensor::Sensor *energy_sensor) { energy_sensor_ = energy_sensor; }
 
-  void set_duration_sensor(uint8_t bus_idx, sensor::Sensor *duration_sensor) { duration_sensor_ = duration_sensor; }
+  void set_current_sensor(uint8_t bus_idx, sensor::Sensor *current_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      current_sensor_[bus_idx] = current_sensor;
+    }
+  }
+
+  void set_shunt_voltage_sensor(uint8_t bus_idx, sensor::Sensor *shunt_voltage_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      shunt_voltage_sensor_[bus_idx] = shunt_voltage_sensor;
+    }
+  }
+
+  void set_power_sensor(uint8_t bus_idx, sensor::Sensor *power_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      power_sensor_[bus_idx] = power_sensor;
+    }
+  }
+
+  void set_charge_sensor(uint8_t bus_idx, sensor::Sensor *charge_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      charge_sensor_[bus_idx] = charge_sensor;
+    }
+  }
+
+  void set_energy_sensor(uint8_t bus_idx, sensor::Sensor *energy_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      energy_sensor_[bus_idx] = energy_sensor;
+    }
+  }
+
+  void set_voltage_min_sensor(uint8_t bus_idx, sensor::Sensor *voltage_min_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      voltage_min_sensor_[bus_idx] = voltage_min_sensor;
+    }
+  }
+
+  void set_voltage_max_sensor(uint8_t bus_idx, sensor::Sensor *voltage_max_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      voltage_max_sensor_[bus_idx] = voltage_max_sensor;
+    }
+  }
+
+  void set_current_min_sensor(uint8_t bus_idx, sensor::Sensor *current_min_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      current_min_sensor_[bus_idx] = current_min_sensor;
+    }
+  }
+  void set_current_max_sensor(uint8_t bus_idx, sensor::Sensor *current_max_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      current_max_sensor_[bus_idx] = current_max_sensor;
+    }
+  }
+
+  void set_power_min_sensor(uint8_t bus_idx, sensor::Sensor *power_min_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      power_min_sensor_[bus_idx] = power_min_sensor;
+    }
+  }
+
+  void set_power_max_sensor(uint8_t bus_idx, sensor::Sensor *power_max_sensor) {
+    if (bus_idx < MAX_BUSES) {
+      power_max_sensor_[bus_idx] = power_max_sensor;
+    }
+  }
+
+  void set_ulp_run_duration_sensor(sensor::Sensor *run_duration_sensor) {
+    ulp_run_duration_sensor_ = run_duration_sensor;
+  }
+
+  void set_address(uint8_t bus_idx, uint8_t address) {
+    if (bus_idx < MAX_BUSES) {
+      address_[bus_idx] = address;
+    }
+  }
+
+  void set_shunt_resistance(uint8_t bus_idx, float shunt_resistance) {
+    if (bus_idx < MAX_BUSES) {
+      shunt_resistance_[bus_idx] = shunt_resistance;
+    }
+  }
+
+  void set_max_system_voltage(uint8_t bus_idx, float max_system_voltage) {
+    if (bus_idx < MAX_BUSES) {
+      max_system_voltage_[bus_idx] = max_system_voltage;
+    }
+  }
+
+  void set_max_system_current(uint8_t bus_idx, float max_system_current) {
+    if (bus_idx < MAX_BUSES) {
+      max_system_current_[bus_idx] = max_system_current;
+    }
+  }
+
+  void set_current_accum_threshold(uint8_t bus_idx, float current_clamp_threshold) {
+    if (bus_idx < MAX_BUSES) {
+      current_accum_threshold_[bus_idx] = current_clamp_threshold;
+    }
+  }
+
+  void set_power_accum_threshold(uint8_t bus_idx, float power_clamp_threshold) {
+    if (bus_idx < MAX_BUSES) {
+      power_accum_threshold_[bus_idx] = power_clamp_threshold;
+    }
+  }
+
+  void set_bus_enabled(uint8_t bus_idx) {
+    if (bus_idx < MAX_BUSES)
+      bus_enabled_[bus_idx] = true;
+  }
 
  protected:
-  sensor::Sensor *voltage_sensor_{nullptr};
-  sensor::Sensor *current_sensor_{nullptr};
-  sensor::Sensor *shunt_voltage_sensor_{nullptr};
-  sensor::Sensor *power_sensor_{nullptr};
-  sensor::Sensor *charge_sensor_{nullptr};
-  sensor::Sensor *energy_sensor_{nullptr};
+  bool bus_enabled_[MAX_BUSES] = {false, false};
+  uint8_t address_[MAX_BUSES] = {0x0, 0x0};
+  float shunt_resistance_[MAX_BUSES] = {0.f, 0.f};
+  float max_system_voltage_[MAX_BUSES] = {0.f, 0.f};
+  float max_system_current_[MAX_BUSES] = {0.f, 0.f};
+  float current_accum_threshold_[MAX_BUSES] = {0.f, 0.f};
+  float power_accum_threshold_[MAX_BUSES] = {0.f, 0.f};
 
-  sensor::Sensor *duration_sensor_{nullptr};
+  sensor::Sensor *voltage_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *current_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *shunt_voltage_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *power_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *charge_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *energy_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *voltage_min_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *voltage_max_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *current_min_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *current_max_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *power_min_sensor_[MAX_BUSES] = {nullptr, nullptr};
+  sensor::Sensor *power_max_sensor_[MAX_BUSES] = {nullptr, nullptr};
 
-  float read_voltage();
-  float read_current();
+  sensor::Sensor *ulp_run_duration_sensor_{nullptr};
+
+  esp_err_t lp_core_init();
+  esp_err_t lp_i2c_init();
 };
 }  // namespace ulp_ina219
 }  // namespace esphome

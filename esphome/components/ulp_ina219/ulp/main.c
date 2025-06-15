@@ -28,8 +28,8 @@ uint8_t cfg_bus_address[MAX_BUS];
 float cfg_bus_max_voltage[MAX_BUS];
 float cfg_bus_max_current[MAX_BUS];
 float cfg_bus_shunt_resistance[MAX_BUS];
-float cfg_bus_current_clamp_threshold[MAX_BUS];
-float cfg_bus_power_clamp_threshold[MAX_BUS];
+float cfg_bus_current_accum_threshold[MAX_BUS];
+float cfg_bus_power_accum_threshold[MAX_BUS];
 uint32_t cfg_bus_calibration_register[MAX_BUS];
 
 // Other configuration variables
@@ -145,7 +145,7 @@ static void process() {
 
       // Accumulate current and energy
       accumulate(bus_reset[i], &bus_charge[i], previous_current, bus_current[i], &bus_energy[i], previous_power,
-                 bus_power[i], cfg_bus_current_clamp_threshold[i], cfg_bus_power_clamp_threshold[i],
+                 bus_power[i], cfg_bus_current_accum_threshold[i], cfg_bus_power_accum_threshold[i],
                  &bus_last_sample_time[i]);
 
       // Clear reset if set
