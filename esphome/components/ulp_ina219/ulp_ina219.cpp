@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include "esp_sleep.h"
 #include "ulp_main.h"
@@ -24,7 +23,7 @@ extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
 static const char *const TAG = "ulp_219";
 
 void UlpIna219::setup() {
-  ESP_LOGCONFIG(TAG, "Setting up ULP INA219...");
+  ESP_LOGCONFIG(TAG, "Running setup...");
 
   esp_err_t ret = this->lp_i2c_init();
   if (ret != ESP_OK) {
@@ -58,9 +57,8 @@ esp_err_t UlpIna219::lp_core_init(void) {
   ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
   for (uint8_t i = 0; i < MAX_BUSES; ++i) {
-    ESP_LOGD(TAG, "Bus %c enabled: %d", i == 0 ? 'A' : 'B', this->bus_enabled_[i]);
     if (this->bus_enabled_[i]) {
-      ((uint8_t *) &ulp_cfg_bus_enabled)[i] = 1;
+      ESP_LOGD(TAG, "Bus %c enabled", i == 0 ? 'A' : 'B');
       ((float *) &ulp_cfg_bus_max_voltage)[i] = this->max_system_voltage_[i];
       ((float *) &ulp_cfg_bus_max_current)[i] = this->max_system_current_[i];
       ((uint8_t *) &ulp_cfg_bus_address)[i] = this->address_[i];
@@ -68,6 +66,8 @@ esp_err_t UlpIna219::lp_core_init(void) {
       ((float *) &ulp_cfg_bus_current_accum_threshold)[i] = this->current_accum_threshold_[i];
       ((float *) &ulp_cfg_bus_power_accum_threshold)[i] = this->power_accum_threshold_[i];
       ((uint8_t *) &ulp_bus_reset)[i] = 1;
+    } else {
+      ESP_LOGD(TAG, "Bus %c disabled", i == 0 ? 'A' : 'B');
     }
   }
 
@@ -107,15 +107,15 @@ esp_err_t UlpIna219::lp_i2c_init(void) {
 
 void UlpIna219::update() {
   for (uint8_t i = 0; i < MAX_BUSES; ++i) {
-    if (!this->bus_enabled_[i])
-      continue;
-
     esp_err_t bus_error_code = ((esp_err_t *) &ulp_bus_error_code)[i];
-
     if (bus_error_code != ESP_OK) {
-      ESP_LOGD(TAG, "Bus %c has errors, code: %u", i == 0 ? 'A' : 'B', bus_error_code);
+      ESP_LOGD(TAG, "Bus %c has errors, code: 0x%X", i == 0 ? 'A' : 'B', bus_error_code);
+      this->mark_failed("error reading device");
       continue;
     }
+
+    if (!this->bus_enabled_[i])
+      continue;
 
     if (this->voltage_sensor_[i] != nullptr) {
       float voltage = ((float *) &ulp_bus_voltage)[i];

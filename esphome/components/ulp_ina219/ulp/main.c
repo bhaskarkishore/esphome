@@ -23,23 +23,22 @@ volatile uint8_t prg_state = PRG_STATE_NONE;
 uint8_t led_interval_counter = 0;
 
 // ina219 configuration variables
-uint8_t cfg_bus_enabled[MAX_BUS];
-uint8_t cfg_bus_address[MAX_BUS];
-float cfg_bus_max_voltage[MAX_BUS];
-float cfg_bus_max_current[MAX_BUS];
-float cfg_bus_shunt_resistance[MAX_BUS];
-float cfg_bus_current_accum_threshold[MAX_BUS];
-float cfg_bus_power_accum_threshold[MAX_BUS];
-uint32_t cfg_bus_calibration_register[MAX_BUS];
+uint8_t cfg_bus_address[MAX_BUS] = {0, 0};
+float cfg_bus_max_voltage[MAX_BUS] = {0.f, 0.f};
+float cfg_bus_max_current[MAX_BUS] = {0.f, 0.f};
+float cfg_bus_shunt_resistance[MAX_BUS] = {0.f, 0.f};
+float cfg_bus_current_accum_threshold[MAX_BUS] = {0.f, 0.f};
+float cfg_bus_power_accum_threshold[MAX_BUS] = {0.f, 0.f};
+uint32_t cfg_bus_calibration_register[MAX_BUS] = {0, 0};
 
 // Other configuration variables
 uint8_t cfg_led_interval = 10;
 
 // Output variables
-esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
+volatile esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
 
 volatile uint8_t bus_reset[MAX_BUS] = {1, 1};
-static uint64_t bus_last_sample_time[MAX_BUS] = {0, 0};
+volatile uint64_t bus_last_sample_time[MAX_BUS] = {0, 0};
 
 volatile float bus_charge[MAX_BUS] = {0.f, 0.f};  // in Ah
 volatile float bus_energy[MAX_BUS] = {0.f, 0.f};  // in Wh
@@ -61,8 +60,6 @@ volatile float bus_current_max[MAX_BUS] = {0.f, 0.f};
 volatile float bus_power_min[MAX_BUS] = {0.f, 0.f};
 volatile float bus_power_max[MAX_BUS] = {0.f, 0.f};
 
-volatile uint32_t debug_a;
-
 static float clamp(float value, float threshold) {
   float v = value < 0.0f ? -value : value;
   if (v <= threshold) {
@@ -71,7 +68,7 @@ static float clamp(float value, float threshold) {
   return value;
 }
 
-static void min_max(float value, float *min, float *max, uint32_t reset) {
+static void min_max(float value, volatile float *min, volatile float *max, uint32_t reset) {
   if (reset) {
     *min = *max = value;
   } else {
@@ -96,9 +93,10 @@ static uint64_t lp_core_rtc_ticks_to_us(uint64_t ticks, uint64_t period) {
   return (ticks * period) >> RTC_CLK_CAL_FRACT;
 }
 
-static void accumulate(uint32_t reset, float *acc_charge, float previous_current, float sampled_current,
-                       float *acc_energy, float previous_power, float sampled_power, float current_clamp_threshold,
-                       float power_clamp_threshold, uint64_t *last_sample_time) {
+static void accumulate(uint32_t reset, volatile float *acc_charge, float previous_current, float sampled_current,
+                       volatile float *acc_energy, float previous_power, float sampled_power,
+                       float current_clamp_threshold, float power_clamp_threshold,
+                       volatile uint64_t *last_sample_time) {
   sampled_current = clamp(sampled_current, current_clamp_threshold);
   sampled_power = clamp(sampled_power, power_clamp_threshold);
   uint64_t current_time = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), slow_clk_period);
@@ -129,8 +127,8 @@ static void process() {
   ulp_lp_core_delay_us(SAMPLING_DELAY_WAIT);
 
   float previous_current = 0.f, previous_power = 0.f;
-  for (int i = 0; i < MAX_BUS; ++i) {
-    if (cfg_bus_enabled[i] && bus_error_code[i] == ESP_OK) {
+  for (uint8_t i = 0; i < MAX_BUS; ++i) {
+    if (cfg_bus_address[i] > 0 && bus_error_code[i] == ESP_OK) {
       previous_current = bus_current[i];
       previous_power = bus_power[i];
 
@@ -152,6 +150,9 @@ static void process() {
 
       // Clear reset if set
       bus_reset[i] = 0;
+
+      // Power down
+      ina219_power_down(cfg_bus_address[i]);
     }
   }
 }
@@ -162,7 +163,8 @@ static void init() {
   uint32_t current_lsb = 0;
 
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
-    if (cfg_bus_enabled[i]) {
+    bus_error_code[i] = ESP_OK;
+    if (cfg_bus_address[i] > 0) {
       ret = ina219_init(cfg_bus_address[i], cfg_bus_max_voltage[i], cfg_bus_shunt_resistance[i], cfg_bus_max_current[i],
                         cfg_bus_calibration_register[i], &calibration_register, &current_lsb);
       if (ret == ESP_OK) {
@@ -171,14 +173,6 @@ static void init() {
       } else {
         bus_error_code[i] = ret;
       }
-    }
-  }
-}
-
-static void try_powerdown() {
-  for (uint8_t i = 0; i < MAX_BUS; ++i) {
-    if (cfg_bus_enabled[i]) {
-      ina219_power_down(cfg_bus_address[i]);
     }
   }
 }
@@ -192,9 +186,10 @@ int main(void) {
     led_interval_counter = 0;
   }
 
+  lp_core_i2c_master_set_ack_check_en(LP_I2C_NUM_0, true);
+
   init();
   process();
-  try_powerdown();
 
   led_interval_counter++;
   ulp_lp_core_gpio_set_level(LED, 0);

@@ -17,12 +17,9 @@ esp_err_t i2c_write16(uint16_t address, uint8_t reg, uint16_t data) {
 }
 
 esp_err_t i2c_read16(uint16_t address, uint8_t reg, uint16_t *data) {
-  esp_err_t ret = i2c_write(address, &reg, 1);
-  if (ret != ESP_OK) {
-    return ret;
-  }
   uint8_t data_rd[2];
-  ret = i2c_read(address, data_rd, 2);
+  esp_err_t ret =
+      lp_core_i2c_master_write_read_device(LP_I2C_NUM_0, address, &reg, 1, data_rd, 2, LP_I2C_TRANS_TIMEOUT_LP_CYCLES);
   if (ret == ESP_OK) {
     *data = data_rd[0] << 8 | data_rd[1];
   }

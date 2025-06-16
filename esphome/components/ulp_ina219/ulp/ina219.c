@@ -9,8 +9,8 @@ esp_err_t ina219_power_down(uint8_t address) { return i2c_write16(address, INA21
 
 esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float max_current,
                       uint32_t cfg_calibration_register, uint32_t *calibration_register, uint32_t *current_lsb) {
-  esp_err_t ret = ESP_OK;
-  ret = i2c_write16(address, INA219_REGISTER_CONFIG, 0x8000);
+  // Reset device
+  esp_err_t ret = i2c_write16(address, INA219_REGISTER_CONFIG, 0x8000);
 
   if (ret != ESP_OK) {
     return ret;
@@ -66,7 +66,7 @@ esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float m
   return ret;
 }
 
-esp_err_t ina219_bus_voltage(uint8_t address, float *bus_voltage) {
+esp_err_t ina219_bus_voltage(uint8_t address, volatile float *bus_voltage) {
   uint16_t raw_bus_voltage = 0;
   esp_err_t ret = i2c_read16(address, INA219_REGISTER_BUS_VOLTAGE, &raw_bus_voltage);
   if (ret == ESP_OK) {
@@ -76,7 +76,7 @@ esp_err_t ina219_bus_voltage(uint8_t address, float *bus_voltage) {
   return ret;
 }
 
-esp_err_t ina219_current(uint8_t address, float *current, uint32_t current_lsb) {
+esp_err_t ina219_current(uint8_t address, volatile float *current, uint32_t current_lsb) {
   uint16_t raw_current = 0;
   esp_err_t ret = i2c_read16(address, INA219_REGISTER_CURRENT, &raw_current);
   if (ret == ESP_OK) {
@@ -86,7 +86,7 @@ esp_err_t ina219_current(uint8_t address, float *current, uint32_t current_lsb) 
   return ret;
 }
 
-esp_err_t ina219_shunt_voltage(uint8_t address, float *shunt_voltage) {
+esp_err_t ina219_shunt_voltage(uint8_t address, volatile float *shunt_voltage) {
   uint16_t raw_shunt_voltage = 0;
   esp_err_t ret = i2c_read16(address, INA219_REGISTER_SHUNT_VOLTAGE, &raw_shunt_voltage);
   if (ret == ESP_OK) {
@@ -95,7 +95,7 @@ esp_err_t ina219_shunt_voltage(uint8_t address, float *shunt_voltage) {
   return ret;
 }
 
-esp_err_t ina219_power(uint8_t address, float *power, uint32_t current_lsb) {
+esp_err_t ina219_power(uint8_t address, volatile float *power, uint32_t current_lsb) {
   uint16_t raw_power = 0;
   esp_err_t ret = i2c_read16(address, INA219_REGISTER_POWER, &raw_power);
   if (ret == ESP_OK) {
