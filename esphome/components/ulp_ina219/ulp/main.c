@@ -6,13 +6,11 @@
 
 // NOTE: All global types are uint32_t, application must handle casting
 
-#define LED LP_IO_NUM_2
-
 // Cross processor state mangement
 #define PRG_STATE_NONE 0
-#define PRG_STATE_ERRORED 1
-#define PRG_STATE_RUNNING 2
-#define PRG_STATE_SLEEPING 3
+#define PRG_STATE_RUNNING 1
+#define PRG_STATE_SLEEPING 2
+
 #define SAMPLING_DELAY_WAIT 75 * 1000
 #define MAX_BUS 2
 
@@ -33,6 +31,7 @@ uint32_t cfg_bus_calibration_register[MAX_BUS] = {0, 0};
 
 // Other configuration variables
 uint8_t cfg_led_interval = 10;
+uint8_t cfg_led_gpio = LP_IO_NUM_2;
 
 // Output variables
 volatile esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
@@ -182,17 +181,15 @@ int main(void) {
   uint64_t current = lp_core_get_rtc_ticks();
 
   if (led_interval_counter >= cfg_led_interval) {
-    ulp_lp_core_gpio_set_level(LED, 1);
+    ulp_lp_core_gpio_set_level(cfg_led_gpio, 1);
     led_interval_counter = 0;
   }
-
-  lp_core_i2c_master_set_ack_check_en(LP_I2C_NUM_0, true);
 
   init();
   process();
 
   led_interval_counter++;
-  ulp_lp_core_gpio_set_level(LED, 0);
+  ulp_lp_core_gpio_set_level(cfg_led_gpio, 0);
 
   run_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, slow_clk_period);
   prg_state = PRG_STATE_SLEEPING;

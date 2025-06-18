@@ -2,7 +2,12 @@ import os
 
 import esphome.codegen as cg
 from esphome.components import esp32, sensor
-from esphome.components.esp32 import VARIANT_ESP32C6, VARIANT_ESP32H2, only_on_variant
+from esphome.components.esp32 import (
+    VARIANT_ESP32C5,
+    VARIANT_ESP32C6,
+    VARIANT_ESP32P4,
+    only_on_variant,
+)
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_ADDRESS,
@@ -53,7 +58,7 @@ ulp_ina219_sensor_ns = cg.esphome_ns.namespace("ulp_ina219")
 
 UlpIna219SensorComponent = ulp_ina219_sensor_ns.class_("UlpIna219", cg.PollingComponent)
 
-SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32H2]
+SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32C5, VARIANT_ESP32P4]
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -186,10 +191,34 @@ CONFIG_SCHEMA = cv.All(
             ),
         }
     ).extend(cv.polling_component_schema("60s")),
-    cv.has_at_least_one_key(CONF_BUS_A),
+    cv.has_at_least_one_key(CONF_BUS_A, CONF_BUS_B),
     cv.only_with_esp_idf,
     only_on_variant(supported=SUPPORTED_VARIANTS),
 )
+
+CONFIG_TYPES = {
+    CONF_ADDRESS: "set_address",
+    CONF_SHUNT_RESISTANCE: "set_shunt_resistance",
+    CONF_MAX_VOLTAGE: "set_max_system_voltage",
+    CONF_MAX_CURRENT: "set_max_system_current",
+    CONF_CURRENT_ACCUM_THRESHOLD: "set_current_accum_threshold",
+    CONF_POWER_ACCUM_THRESHOLD: "set_power_accum_threshold",
+}
+
+SENSOR_TYPES = {
+    CONF_VOLTAGE: "set_voltage_sensor",
+    CONF_CURRENT: "set_current_sensor",
+    CONF_POWER: "set_power_sensor",
+    CONF_ENERGY: "set_energy_sensor",
+    CONF_CHARGE: "set_charge_sensor",
+    CONF_SHUNT_VOLTAGE: "set_shunt_voltage_sensor",
+    CONF_VOLTAGE_MAX: "set_voltage_max_sensor",
+    CONF_VOLTAGE_MIN: "set_voltage_min_sensor",
+    CONF_CURRENT_MAX: "set_current_max_sensor",
+    CONF_CURRENT_MIN: "set_current_min_sensor",
+    CONF_POWER_MAX: "set_power_max_sensor",
+    CONF_POWER_MIN: "set_power_min_sensor",
+}
 
 
 async def to_code(config):
@@ -219,98 +248,48 @@ async def to_code(config):
     for bus_idx, bus_key in enumerate(bus_keys):
         if bus_key in config:
             bus_config = config[bus_key]
-
             cg.add(var.set_bus_enabled(bus_idx))
 
-            if CONF_ADDRESS in bus_config:
-                cg.add(var.set_address(bus_idx, bus_config[CONF_ADDRESS]))
+            for key, fn in CONFIG_TYPES.items():
+                if key in bus_config:
+                    cg.add(getattr(var, fn)(bus_idx, bus_config[key]))
 
-            if CONF_SHUNT_RESISTANCE in bus_config:
-                cg.add(
-                    var.set_shunt_resistance(bus_idx, bus_config[CONF_SHUNT_RESISTANCE])
-                )
+            # if CONF_ADDRESS in bus_config:
+            #     cg.add(var.set_address(bus_idx, bus_config[CONF_ADDRESS]))
 
-            if CONF_MAX_VOLTAGE in bus_config:
-                cg.add(
-                    var.set_max_system_voltage(bus_idx, bus_config[CONF_MAX_VOLTAGE])
-                )
+            # if CONF_SHUNT_RESISTANCE in bus_config:
+            #     cg.add(
+            #         var.set_shunt_resistance(bus_idx, bus_config[CONF_SHUNT_RESISTANCE])
+            #     )
 
-            if CONF_MAX_CURRENT in bus_config:
-                cg.add(
-                    var.set_max_system_current(bus_idx, bus_config[CONF_MAX_CURRENT])
-                )
+            # if CONF_MAX_VOLTAGE in bus_config:
+            #     cg.add(
+            #         var.set_max_system_voltage(bus_idx, bus_config[CONF_MAX_VOLTAGE])
+            #     )
 
-            if CONF_CURRENT_ACCUM_THRESHOLD in bus_config:
-                cg.add(
-                    var.set_current_accum_threshold(
-                        bus_idx, bus_config[CONF_CURRENT_ACCUM_THRESHOLD]
-                    )
-                )
+            # if CONF_MAX_CURRENT in bus_config:
+            #     cg.add(
+            #         var.set_max_system_current(bus_idx, bus_config[CONF_MAX_CURRENT])
+            #     )
 
-            if CONF_POWER_ACCUM_THRESHOLD in bus_config:
-                cg.add(
-                    var.set_power_accum_threshold(
-                        bus_idx, bus_config[CONF_POWER_ACCUM_THRESHOLD]
-                    )
-                )
+            # if CONF_CURRENT_ACCUM_THRESHOLD in bus_config:
+            #     cg.add(
+            #         var.set_current_accum_threshold(
+            #             bus_idx, bus_config[CONF_CURRENT_ACCUM_THRESHOLD]
+            #         )
+            #     )
 
-            if CONF_VOLTAGE in bus_config:
-                voltage_sensor = await sensor.new_sensor(bus_config[CONF_VOLTAGE])
-                cg.add(var.set_voltage_sensor(bus_idx, voltage_sensor))
+            # if CONF_POWER_ACCUM_THRESHOLD in bus_config:
+            #     cg.add(
+            #         var.set_power_accum_threshold(
+            #             bus_idx, bus_config[CONF_POWER_ACCUM_THRESHOLD]
+            #         )
+            #     )
 
-            if CONF_CURRENT in bus_config:
-                current_sensor = await sensor.new_sensor(bus_config[CONF_CURRENT])
-                cg.add(var.set_current_sensor(bus_idx, current_sensor))
-
-            if CONF_POWER in bus_config:
-                power_sensor = await sensor.new_sensor(bus_config[CONF_POWER])
-                cg.add(var.set_power_sensor(bus_idx, power_sensor))
-
-            if CONF_ENERGY in bus_config:
-                energy_sensor = await sensor.new_sensor(bus_config[CONF_ENERGY])
-                cg.add(var.set_energy_sensor(bus_idx, energy_sensor))
-
-            if CONF_CHARGE in bus_config:
-                charge_sensor = await sensor.new_sensor(bus_config[CONF_CHARGE])
-                cg.add(var.set_charge_sensor(bus_idx, charge_sensor))
-
-            if CONF_SHUNT_VOLTAGE in bus_config:
-                shunt_voltage_sensor = await sensor.new_sensor(
-                    bus_config[CONF_SHUNT_VOLTAGE]
-                )
-                cg.add(var.set_shunt_voltage_sensor(bus_idx, shunt_voltage_sensor))
-
-            if CONF_VOLTAGE_MAX in bus_config:
-                voltage_max_sensor = await sensor.new_sensor(
-                    bus_config[CONF_VOLTAGE_MAX]
-                )
-                cg.add(var.set_voltage_max_sensor(bus_idx, voltage_max_sensor))
-
-            if CONF_VOLTAGE_MIN in bus_config:
-                voltage_min_sensor = await sensor.new_sensor(
-                    bus_config[CONF_VOLTAGE_MIN]
-                )
-                cg.add(var.set_voltage_min_sensor(bus_idx, voltage_min_sensor))
-
-            if CONF_CURRENT_MAX in bus_config:
-                current_max_sensor = await sensor.new_sensor(
-                    bus_config[CONF_CURRENT_MAX]
-                )
-                cg.add(var.set_current_max_sensor(bus_idx, current_max_sensor))
-
-            if CONF_CURRENT_MIN in bus_config:
-                current_min_sensor = await sensor.new_sensor(
-                    bus_config[CONF_CURRENT_MIN]
-                )
-                cg.add(var.set_current_min_sensor(bus_idx, current_min_sensor))
-
-            if CONF_POWER_MAX in bus_config:
-                power_max_sensor = await sensor.new_sensor(bus_config[CONF_POWER_MAX])
-                cg.add(var.set_power_max_sensor(bus_idx, power_max_sensor))
-
-            if CONF_POWER_MIN in bus_config:
-                power_min_sensor = await sensor.new_sensor(bus_config[CONF_POWER_MIN])
-                cg.add(var.set_power_min_sensor(bus_idx, power_min_sensor))
+            for key, fn in SENSOR_TYPES.items():
+                if key in bus_config:
+                    s = await sensor.new_sensor(bus_config[key])
+                    cg.add(getattr(var, fn)(bus_idx, s))
 
     if CONF_ULP_RUNTIME in config:
         duration_sensor = await sensor.new_sensor(config[CONF_ULP_RUNTIME])

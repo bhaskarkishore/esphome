@@ -25,19 +25,24 @@ static const char *const TAG = "ulp_219";
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup...");
 
-  esp_err_t ret = this->lp_i2c_init();
-  if (ret != ESP_OK) {
-    this->mark_failed("Unable to initialize ulp i2c");
-    return;
-  }
-  ret = this->lp_core_init();
-  if (ret != ESP_OK) {
-    this->mark_failed("Unable to initialize ulp core");
-    return;
+  if (ulp_prg_state == 0) {
+    esp_err_t ret = this->lp_i2c_init_();
+    if (ret != ESP_OK) {
+      this->mark_failed("Unable to initialize ulp i2c");
+      return;
+    }
+    ret = this->lp_core_init_();
+    if (ret != ESP_OK) {
+      this->mark_failed("Unable to initialize ulp core");
+      return;
+    }
+    ESP_LOGCONFIG(TAG, "Ulp started");
+  } else {
+    ESP_LOGCONFIG(TAG, "Ulp already running");
   }
 }
 
-esp_err_t UlpIna219::lp_core_init(void) {
+esp_err_t UlpIna219::lp_core_init_(void) {
   esp_err_t ret = ESP_OK;
 
   ulp_lp_core_cfg_t cfg = {.wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
@@ -87,7 +92,7 @@ esp_err_t UlpIna219::lp_core_init(void) {
   return ret;
 }
 
-esp_err_t UlpIna219::lp_i2c_init(void) {
+esp_err_t UlpIna219::lp_i2c_init_(void) {
   const lp_core_i2c_cfg_t i2c_cfg = {
       .i2c_pin_cfg =
           {

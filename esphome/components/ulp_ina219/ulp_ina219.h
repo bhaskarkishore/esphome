@@ -155,8 +155,8 @@ class UlpIna219 : public PollingComponent {
 
   sensor::Sensor *ulp_run_duration_sensor_{nullptr};
 
-  esp_err_t lp_core_init();
-  esp_err_t lp_i2c_init();
+  esp_err_t lp_core_init_();
+  esp_err_t lp_i2c_init_();
 };
 }  // namespace ulp_ina219
 }  // namespace esphome
