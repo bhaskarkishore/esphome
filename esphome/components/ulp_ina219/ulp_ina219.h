@@ -123,8 +123,9 @@ class UlpIna219 : public PollingComponent {
   }
 
   void set_bus_enabled(uint8_t bus_idx) {
-    // if (bus_idx < MAX_BUSES)
-    bus_enabled_[bus_idx] = true;
+    if (bus_idx < MAX_BUSES) {
+      bus_enabled_[bus_idx] = true;
+    }
   }
 
   void set_led_pin(InternalGPIOPin *led_pin) { led_pin_ = gpio_num_t(led_pin->get_pin()); }
@@ -133,7 +134,26 @@ class UlpIna219 : public PollingComponent {
 
   void set_sleep_duration(uint32_t sleep_duration) { sleep_duration_ = sleep_duration; }
 
+  void set_calibration_register(uint8_t bus_idx, uint32_t calibration_register) {
+    if (bus_idx < MAX_BUSES) {
+      calibration_register_[bus_idx] = calibration_register;
+    }
+  }
+
+  void set_lp_sda_pin(InternalGPIOPin *lp_sda_pin) { lp_sda_pin_ = gpio_num_t(lp_sda_pin->get_pin()); }
+
+  void set_lp_scl_pin(InternalGPIOPin *lp_scl_pin) { lp_scl_pin_ = gpio_num_t(lp_scl_pin->get_pin()); }
+
+  void set_lp_sda_pullup_en(bool lp_sda_pullup_en) { lp_sda_pullup_en_ = lp_sda_pullup_en; }
+
+  void set_lp_scl_pullup_en(bool lp_scl_pullup_en) { lp_scl_pullup_en_ = lp_scl_pullup_en; }
+
  protected:
+  gpio_num_t lp_sda_pin_ = GPIO_NUM_6;  // Fixed pins for c6
+  gpio_num_t lp_scl_pin_ = GPIO_NUM_7;  // Fixed pins for c6
+  bool lp_sda_pullup_en_ = true;
+  bool lp_scl_pullup_en_ = true;
+
   gpio_num_t led_pin_ = GPIO_NUM_NC;
   uint8_t led_interval_ = 0;
   uint32_t sleep_duration_ = 0;
@@ -144,6 +164,7 @@ class UlpIna219 : public PollingComponent {
   float max_system_current_[MAX_BUSES] = {0.f, 0.f};
   float current_accum_threshold_[MAX_BUSES] = {0.f, 0.f};
   float power_accum_threshold_[MAX_BUSES] = {0.f, 0.f};
+  float calibration_register_[MAX_BUSES] = {0, 0};
 
   sensor::Sensor *voltage_sensor_[MAX_BUSES] = {nullptr, nullptr};
   sensor::Sensor *current_sensor_[MAX_BUSES] = {nullptr, nullptr};

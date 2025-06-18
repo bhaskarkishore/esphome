@@ -27,7 +27,7 @@ void UlpIna219::setup() {
 
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
 
-  if (ulp_prg_state == 0 || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+  if (*((uint8_t *) &ulp_prg_state) == 0 || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
     ulp_lp_core_stop();
 
     esp_err_t ret = this->lp_i2c_init_();
@@ -84,20 +84,7 @@ esp_err_t UlpIna219::lp_core_init_(void) {
       ((float *) &ulp_cfg_bus_current_accum_threshold)[i] = this->current_accum_threshold_[i];
       ((float *) &ulp_cfg_bus_power_accum_threshold)[i] = this->power_accum_threshold_[i];
       ((uint8_t *) &ulp_bus_reset)[i] = 1;
-
-      ESP_LOGD(TAG, "ulp_cfg_bus_max_voltage[%d] = %.2f", i, ((float *) &ulp_cfg_bus_max_voltage)[i]);
-
-      ESP_LOGD(TAG, "ulp_cfg_bus_max_current[%d] = %.2f", i, ((float *) &ulp_cfg_bus_max_current)[i]);
-      ESP_LOGD(TAG, "ulp_cfg_bus_address[%d] = %X", i, ((uint8_t *) &ulp_cfg_bus_address)[i]);
-      ESP_LOGD(TAG, "ulp_cfg_bus_shunt_resistance[%d] = %.6f", i, ((float *) &ulp_cfg_bus_shunt_resistance)[i]);
-      ESP_LOGD(TAG, "ulp_cfg_bus_current_accum_threshold[%d] = %.2f", i,
-               ((float *) &ulp_cfg_bus_current_accum_threshold)[i]);
-
-      ESP_LOGD(TAG, "ulp_cfg_bus_power_accum_threshold[%d] = %.2f", i,
-               ((float *) &ulp_cfg_bus_power_accum_threshold)[i]);
-
-      ESP_LOGD(TAG, "ulp_bus_reset[%d] = 1", ((uint8_t *) &ulp_bus_reset)[i]);
-
+      ((uint32_t *) &ulp_cfg_bus_calibration_register)[i] = this->calibration_register_[i];
     } else {
       ((uint8_t *) &ulp_cfg_bus_address)[i] = 0x0;
       ESP_LOGD(TAG, "Bus %c disabled", i == 0 ? 'A' : 'B');
@@ -124,10 +111,10 @@ esp_err_t UlpIna219::lp_i2c_init_(void) {
   const lp_core_i2c_cfg_t i2c_cfg = {
       .i2c_pin_cfg =
           {
-              .sda_io_num = GPIO_NUM_6,  // Fixed SDA pin (see datasheet)
-              .scl_io_num = GPIO_NUM_7,  // Fixed SCL pin (see datasheet)
-              .sda_pullup_en = true,     // Enable internal pullup for SDA
-              .scl_pullup_en = true,     // Enable internal pullup for SCL
+              .sda_io_num = this->lp_sda_pin_,
+              .scl_io_num = this->lp_scl_pin_,
+              .sda_pullup_en = this->lp_sda_pullup_en_,
+              .scl_pullup_en = this->lp_scl_pullup_en_,
           },
       .i2c_timing_cfg =
           {
@@ -140,15 +127,21 @@ esp_err_t UlpIna219::lp_i2c_init_(void) {
 
 void UlpIna219::update() {
   for (uint8_t i = 0; i < MAX_BUSES; ++i) {
+    if (!this->bus_enabled_[i])
+      continue;
+
+    char bus = i == 0 ? 'a' : 'b';
+
+    ESP_LOGD(TAG, "Bus %c:", bus);
+    ESP_LOGD(TAG, "Calibration register: %u", ((uint32_t *) &ulp_bus_calibration_register)[i]);
+    ESP_LOGD(TAG, "Current LSB: %u", ((uint32_t *) &ulp_bus_current_lsb)[i]);
+
     esp_err_t bus_error_code = ((esp_err_t *) &ulp_bus_error_code)[i];
     if (bus_error_code != ESP_OK) {
-      ESP_LOGD(TAG, "Bus %c has errors, code: 0x%X", i == 0 ? 'A' : 'B', bus_error_code);
+      ESP_LOGD(TAG, "Bus has errors, code: 0x%X", bus_error_code);
       this->mark_failed("error reading device");
       continue;
     }
-
-    if (!this->bus_enabled_[i])
-      continue;
 
     if (this->voltage_sensor_[i] != nullptr) {
       float voltage = ((float *) &ulp_bus_voltage)[i];
@@ -211,23 +204,55 @@ void UlpIna219::update() {
     }
   }
 
-  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (float) ulp_run_duration / 1000);
+  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (double) ulp_run_duration / 1000);
 }
 
 void UlpIna219::dump_config() {
-  ESP_LOGCONFIG(TAG, "Sensor Config:");
-  LOG_UPDATE_INTERVAL(this);
-
-  // if (this->voltage_sensor_ != nullptr) {
-  //   LOG_SENSOR("  ", "Voltage", this->voltage_sensor_);
-  // }
-  // if (this->current_sensor_ != nullptr) {
-  //   LOG_SENSOR("  ", "Current", this->current_sensor_);
-  // }
+  ESP_LOGCONFIG(TAG, "ULP INA219:");
 
   if (this->is_failed()) {
-    ESP_LOGE(TAG, "Component setup failed!");
+    ESP_LOGE(TAG, ESP_LOG_MSG_COMM_FAIL);
   }
+
+  ESP_LOGCONFIG(TAG, "Sleep Duration: %d", this->sleep_duration_);
+  ESP_LOGCONFIG(TAG, "lp_i2c:");
+  ESP_LOGCONFIG(TAG, "  SDA Pin: %d", this->lp_sda_pin_);
+  ESP_LOGCONFIG(TAG, "  SDA Pull Enabled: %d", this->lp_sda_pullup_en_);
+  ESP_LOGCONFIG(TAG, "  SCL Pin: %d", this->lp_scl_pin_);
+  ESP_LOGCONFIG(TAG, "  SCL Pull Enabled: %d", this->lp_scl_pullup_en_);
+
+  if (this->led_pin_ != GPIO_NUM_NC) {
+    ESP_LOGCONFIG(TAG, "led:");
+    ESP_LOGCONFIG(TAG, "  pin: %d", this->led_pin_);
+    ESP_LOGCONFIG(TAG, "  interval: %d", this->led_interval_);
+  }
+
+  for (uint8_t i = 0; i < MAX_BUSES; ++i) {
+    if (this->bus_enabled_[i]) {
+      ESP_LOGCONFIG(TAG, "bus_%c:", i == 0 ? 'a' : 'b');
+      ESP_LOGCONFIG(TAG, "  Address: %X", this->address_[i]);
+      ESP_LOGCONFIG(TAG, "  Shunt Resistance: %f", this->shunt_resistance_[i]);
+      ESP_LOGCONFIG(TAG, "  Max Voltage: %f", this->max_system_voltage_[i]);
+      ESP_LOGCONFIG(TAG, "  Max Current: %f", this->max_system_current_[i]);
+      ESP_LOGCONFIG(TAG, "  Current Accumulation Threshold: %f", this->current_accum_threshold_[i]);
+      ESP_LOGCONFIG(TAG, "  Power Accumulation Threshold: %f", this->power_accum_threshold_[i]);
+      ESP_LOGCONFIG(TAG, "  Calibration Register: %f", this->calibration_register_[i]);
+      LOG_SENSOR("  ", "Voltage", this->voltage_sensor_[i]);
+      LOG_SENSOR("  ", "Current", this->current_sensor_[i]);
+      LOG_SENSOR("  ", "Power", this->power_sensor_[i]);
+      LOG_SENSOR("  ", "Shunt Voltage", this->shunt_voltage_sensor_[i]);
+      LOG_SENSOR("  ", "Energy", this->energy_sensor_[i]);
+      LOG_SENSOR("  ", "Charge", this->charge_sensor_[i]);
+      LOG_SENSOR("  ", "Voltage (max)", this->voltage_max_sensor_[i]);
+      LOG_SENSOR("  ", "Voltage (min)", this->voltage_min_sensor_[i]);
+      LOG_SENSOR("  ", "Current (max)", this->current_max_sensor_[i]);
+      LOG_SENSOR("  ", "Current (min)", this->current_min_sensor_[i]);
+      LOG_SENSOR("  ", "Power (max)", this->power_max_sensor_[i]);
+      LOG_SENSOR("  ", "Power (min)", this->power_min_sensor_[i]);
+    }
+  }
+
+  LOG_UPDATE_INTERVAL(this);
 }
 
 }  // namespace ulp_ina219

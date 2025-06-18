@@ -35,6 +35,7 @@ from esphome.const import (
 from .const import (
     CONF_BUS_A,
     CONF_BUS_B,
+    CONF_CALIBRATION_REGISTER,
     CONF_CHARGE,
     CONF_CURRENT_ACCUM_THRESHOLD,
     CONF_CURRENT_MAX,
@@ -76,6 +77,9 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         cv.Optional(CONF_POWER_ACCUM_THRESHOLD, default=0): cv.All(
             cv.current, cv.Range(min=0.0)
+        ),
+        cv.Optional(CONF_CALIBRATION_REGISTER, default=0): cv.All(
+            cv.positive_int, cv.Range(min=0, max=32767)
         ),
     }
 )
@@ -210,6 +214,7 @@ CONFIG_TYPES = {
     CONF_MAX_CURRENT: "set_max_system_current",
     CONF_CURRENT_ACCUM_THRESHOLD: "set_current_accum_threshold",
     CONF_POWER_ACCUM_THRESHOLD: "set_power_accum_threshold",
+    CONF_CALIBRATION_REGISTER: "set_calibration_register",
 }
 
 SENSOR_TYPES = {
