@@ -1,34 +1,32 @@
 import os
 
+from esphome import pins
 import esphome.codegen as cg
 from esphome.components import esp32, sensor
-from esphome.components.esp32 import (
-    VARIANT_ESP32C5,
-    VARIANT_ESP32C6,
-    VARIANT_ESP32P4,
-    only_on_variant,
-)
+from esphome.components.esp32 import VARIANT_ESP32C6, only_on_variant
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_ADDRESS,
     CONF_CURRENT,
     CONF_ENERGY,
     CONF_ID,
+    CONF_INTERVAL,
+    CONF_LED,
     CONF_MAX_CURRENT,
     CONF_MAX_VOLTAGE,
+    CONF_PIN,
     CONF_POWER,
     CONF_SHUNT_RESISTANCE,
     CONF_SHUNT_VOLTAGE,
+    CONF_SLEEP_DURATION,
     CONF_VOLTAGE,
     DEVICE_CLASS_CURRENT,
-    DEVICE_CLASS_DURATION,
     DEVICE_CLASS_ENERGY,
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_VOLTAGE,
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL,
     UNIT_AMPERE,
-    UNIT_MILLISECOND,
     UNIT_VOLT,
     UNIT_WATT,
     UNIT_WATT_HOURS,
@@ -44,7 +42,6 @@ from .const import (
     CONF_POWER_ACCUM_THRESHOLD,
     CONF_POWER_MAX,
     CONF_POWER_MIN,
-    CONF_ULP_RUNTIME,
     CONF_VOLTAGE_MAX,
     CONF_VOLTAGE_MIN,
     UNIT_AMPS_HOURS,
@@ -54,11 +51,14 @@ DEPENDENCIES = ["esp32"]
 
 ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c"]
 
+BUS_KEYS = [CONF_BUS_A, CONF_BUS_B]
+
 ulp_ina219_sensor_ns = cg.esphome_ns.namespace("ulp_ina219")
 
 UlpIna219SensorComponent = ulp_ina219_sensor_ns.class_("UlpIna219", cg.PollingComponent)
 
-SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32C5, VARIANT_ESP32P4]
+# The c6 lp_core is also supported on c5 and p4 variants. These may tested and added in the future.
+SUPPORTED_VARIANTS = [VARIANT_ESP32C6]
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -156,6 +156,15 @@ SENSOR_SCHEMA = cv.Schema(
     }
 )
 
+LED_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_PIN): pins.gpio_output_pin_schema,
+        cv.Optional(CONF_INTERVAL, default=10): cv.All(
+            cv.positive_int, cv.Range(min=0, max=255)
+        ),
+    }
+)
+
 BUS_SCHEMA_A = (
     cv.Schema(
         {
@@ -183,11 +192,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("update_interval", default="60s"): cv.update_interval,
             cv.Optional(CONF_BUS_A): BUS_SCHEMA_A,
             cv.Optional(CONF_BUS_B): BUS_SCHEMA_B,
-            cv.Optional(CONF_ULP_RUNTIME): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLISECOND,
-                accuracy_decimals=3,
-                device_class=DEVICE_CLASS_DURATION,
-                state_class=STATE_CLASS_MEASUREMENT,
+            cv.Optional(CONF_LED): LED_SCHEMA,
+            cv.Optional(CONF_SLEEP_DURATION, default="177ms"): cv.templatable(
+                cv.positive_time_period_milliseconds
             ),
         }
     ).extend(cv.polling_component_schema("60s")),
@@ -243,9 +250,17 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    bus_keys = [CONF_BUS_A, CONF_BUS_B]
+    if CONF_LED in config:
+        if CONF_PIN in config[CONF_LED]:
+            pin = await cg.gpio_pin_expression(config[CONF_LED][CONF_PIN])
+            cg.add(var.set_led_pin(pin))
+        if CONF_INTERVAL in config[CONF_LED]:
+            cg.add(var.set_led_interval(config[CONF_LED][CONF_INTERVAL]))
 
-    for bus_idx, bus_key in enumerate(bus_keys):
+    if CONF_SLEEP_DURATION in config:
+        cg.add(var.set_sleep_duration(config[CONF_SLEEP_DURATION]))
+
+    for bus_idx, bus_key in enumerate(BUS_KEYS):
         if bus_key in config:
             bus_config = config[bus_key]
             cg.add(var.set_bus_enabled(bus_idx))
@@ -254,43 +269,7 @@ async def to_code(config):
                 if key in bus_config:
                     cg.add(getattr(var, fn)(bus_idx, bus_config[key]))
 
-            # if CONF_ADDRESS in bus_config:
-            #     cg.add(var.set_address(bus_idx, bus_config[CONF_ADDRESS]))
-
-            # if CONF_SHUNT_RESISTANCE in bus_config:
-            #     cg.add(
-            #         var.set_shunt_resistance(bus_idx, bus_config[CONF_SHUNT_RESISTANCE])
-            #     )
-
-            # if CONF_MAX_VOLTAGE in bus_config:
-            #     cg.add(
-            #         var.set_max_system_voltage(bus_idx, bus_config[CONF_MAX_VOLTAGE])
-            #     )
-
-            # if CONF_MAX_CURRENT in bus_config:
-            #     cg.add(
-            #         var.set_max_system_current(bus_idx, bus_config[CONF_MAX_CURRENT])
-            #     )
-
-            # if CONF_CURRENT_ACCUM_THRESHOLD in bus_config:
-            #     cg.add(
-            #         var.set_current_accum_threshold(
-            #             bus_idx, bus_config[CONF_CURRENT_ACCUM_THRESHOLD]
-            #         )
-            #     )
-
-            # if CONF_POWER_ACCUM_THRESHOLD in bus_config:
-            #     cg.add(
-            #         var.set_power_accum_threshold(
-            #             bus_idx, bus_config[CONF_POWER_ACCUM_THRESHOLD]
-            #         )
-            #     )
-
             for key, fn in SENSOR_TYPES.items():
                 if key in bus_config:
                     s = await sensor.new_sensor(bus_config[key])
                     cg.add(getattr(var, fn)(bus_idx, s))
-
-    if CONF_ULP_RUNTIME in config:
-        duration_sensor = await sensor.new_sensor(config[CONF_ULP_RUNTIME])
-        cg.add(var.set_ulp_run_duration_sensor(duration_sensor))

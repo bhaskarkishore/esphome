@@ -30,8 +30,8 @@ float cfg_bus_power_accum_threshold[MAX_BUS] = {0.f, 0.f};
 uint32_t cfg_bus_calibration_register[MAX_BUS] = {0, 0};
 
 // Other configuration variables
-uint8_t cfg_led_interval = 10;
-uint8_t cfg_led_gpio = LP_IO_NUM_2;
+uint8_t cfg_led_interval = 0;
+int8_t cfg_led_gpio = -1;
 
 // Output variables
 volatile esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
@@ -180,16 +180,20 @@ int main(void) {
   prg_state = PRG_STATE_RUNNING;
   uint64_t current = lp_core_get_rtc_ticks();
 
-  if (led_interval_counter >= cfg_led_interval) {
-    ulp_lp_core_gpio_set_level(cfg_led_gpio, 1);
-    led_interval_counter = 0;
+  if (cfg_led_interval > 0 && cfg_led_gpio > -1) {
+    if (led_interval_counter >= cfg_led_interval) {
+      ulp_lp_core_gpio_set_level(cfg_led_gpio, 1);
+      led_interval_counter = 0;
+    }
   }
 
   init();
   process();
 
-  led_interval_counter++;
-  ulp_lp_core_gpio_set_level(cfg_led_gpio, 0);
+  if (cfg_led_interval > 0 && cfg_led_gpio > -1) {
+    led_interval_counter++;
+    ulp_lp_core_gpio_set_level(cfg_led_gpio, 0);
+  }
 
   run_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, slow_clk_period);
   prg_state = PRG_STATE_SLEEPING;

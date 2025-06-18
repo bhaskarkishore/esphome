@@ -86,10 +86,6 @@ class UlpIna219 : public PollingComponent {
     }
   }
 
-  void set_ulp_run_duration_sensor(sensor::Sensor *run_duration_sensor) {
-    ulp_run_duration_sensor_ = run_duration_sensor;
-  }
-
   void set_address(uint8_t bus_idx, uint8_t address) {
     if (bus_idx < MAX_BUSES) {
       address_[bus_idx] = address;
@@ -131,7 +127,16 @@ class UlpIna219 : public PollingComponent {
     bus_enabled_[bus_idx] = true;
   }
 
+  void set_led_pin(InternalGPIOPin *led_pin) { led_pin_ = gpio_num_t(led_pin->get_pin()); }
+
+  void set_led_interval(uint8_t interval) { led_interval_ = interval; }
+
+  void set_sleep_duration(uint32_t sleep_duration) { sleep_duration_ = sleep_duration; }
+
  protected:
+  gpio_num_t led_pin_ = GPIO_NUM_NC;
+  uint8_t led_interval_ = 0;
+  uint32_t sleep_duration_ = 0;
   bool bus_enabled_[MAX_BUSES] = {false, false};
   uint8_t address_[MAX_BUSES] = {0x0, 0x0};
   float shunt_resistance_[MAX_BUSES] = {0.f, 0.f};
@@ -152,8 +157,6 @@ class UlpIna219 : public PollingComponent {
   sensor::Sensor *current_max_sensor_[MAX_BUSES] = {nullptr, nullptr};
   sensor::Sensor *power_min_sensor_[MAX_BUSES] = {nullptr, nullptr};
   sensor::Sensor *power_max_sensor_[MAX_BUSES] = {nullptr, nullptr};
-
-  sensor::Sensor *ulp_run_duration_sensor_{nullptr};
 
   esp_err_t lp_core_init_();
   esp_err_t lp_i2c_init_();

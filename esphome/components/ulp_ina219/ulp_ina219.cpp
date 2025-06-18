@@ -25,7 +25,11 @@ static const char *const TAG = "ulp_219";
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup...");
 
-  if (ulp_prg_state == 0) {
+  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+
+  if (ulp_prg_state == 0 || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    ulp_lp_core_stop();
+
     esp_err_t ret = this->lp_i2c_init_();
     if (ret != ESP_OK) {
       this->mark_failed("Unable to initialize ulp i2c");
@@ -38,6 +42,8 @@ void UlpIna219::setup() {
     }
     ESP_LOGCONFIG(TAG, "Ulp started");
   } else {
+    // Recalibrate the slow clock period
+    ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
     ESP_LOGCONFIG(TAG, "Ulp already running");
   }
 }
@@ -46,7 +52,7 @@ esp_err_t UlpIna219::lp_core_init_(void) {
   esp_err_t ret = ESP_OK;
 
   ulp_lp_core_cfg_t cfg = {.wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
-                           .lp_timer_sleep_duration_us = 177 * 1000};
+                           .lp_timer_sleep_duration_us = this->sleep_duration_ * 1000};
 
   ret = ulp_lp_core_load_binary(lp_core_main_bin_start, (lp_core_main_bin_end - lp_core_main_bin_start));
   if (ret != ESP_OK) {
@@ -54,10 +60,17 @@ esp_err_t UlpIna219::lp_core_init_(void) {
     return ret;
   }
 
-  rtc_gpio_init(LED_GREEN);
-  rtc_gpio_set_direction(LED_GREEN, RTC_GPIO_MODE_OUTPUT_ONLY);
-  rtc_gpio_pulldown_dis(LED_GREEN);
-  rtc_gpio_pullup_dis(LED_GREEN);
+  if (this->led_pin_ != GPIO_NUM_NC && this->led_interval_ > 0) {
+    rtc_gpio_init(this->led_pin_);
+    rtc_gpio_set_direction(this->led_pin_, RTC_GPIO_MODE_OUTPUT_ONLY);
+    rtc_gpio_pulldown_dis(this->led_pin_);
+    rtc_gpio_pullup_dis(this->led_pin_);
+    *((uint8_t *) &ulp_cfg_led_interval) = this->led_interval_;
+    *((int8_t *) &ulp_cfg_led_gpio) = this->led_pin_;
+  } else {
+    *((uint8_t *) &ulp_cfg_led_interval) = 0;
+    *((int8_t *) &ulp_cfg_led_gpio) = -1;
+  }
 
   ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
@@ -71,7 +84,22 @@ esp_err_t UlpIna219::lp_core_init_(void) {
       ((float *) &ulp_cfg_bus_current_accum_threshold)[i] = this->current_accum_threshold_[i];
       ((float *) &ulp_cfg_bus_power_accum_threshold)[i] = this->power_accum_threshold_[i];
       ((uint8_t *) &ulp_bus_reset)[i] = 1;
+
+      ESP_LOGD(TAG, "ulp_cfg_bus_max_voltage[%d] = %.2f", i, ((float *) &ulp_cfg_bus_max_voltage)[i]);
+
+      ESP_LOGD(TAG, "ulp_cfg_bus_max_current[%d] = %.2f", i, ((float *) &ulp_cfg_bus_max_current)[i]);
+      ESP_LOGD(TAG, "ulp_cfg_bus_address[%d] = %X", i, ((uint8_t *) &ulp_cfg_bus_address)[i]);
+      ESP_LOGD(TAG, "ulp_cfg_bus_shunt_resistance[%d] = %.6f", i, ((float *) &ulp_cfg_bus_shunt_resistance)[i]);
+      ESP_LOGD(TAG, "ulp_cfg_bus_current_accum_threshold[%d] = %.2f", i,
+               ((float *) &ulp_cfg_bus_current_accum_threshold)[i]);
+
+      ESP_LOGD(TAG, "ulp_cfg_bus_power_accum_threshold[%d] = %.2f", i,
+               ((float *) &ulp_cfg_bus_power_accum_threshold)[i]);
+
+      ESP_LOGD(TAG, "ulp_bus_reset[%d] = 1", ((uint8_t *) &ulp_bus_reset)[i]);
+
     } else {
+      ((uint8_t *) &ulp_cfg_bus_address)[i] = 0x0;
       ESP_LOGD(TAG, "Bus %c disabled", i == 0 ? 'A' : 'B');
     }
   }
@@ -183,10 +211,7 @@ void UlpIna219::update() {
     }
   }
 
-  if (this->ulp_run_duration_sensor_ != nullptr) {
-    float duration = (float) ulp_run_duration / 1000;
-    this->ulp_run_duration_sensor_->publish_state(duration);
-  }
+  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (float) ulp_run_duration / 1000);
 }
 
 void UlpIna219::dump_config() {
@@ -199,9 +224,6 @@ void UlpIna219::dump_config() {
   // if (this->current_sensor_ != nullptr) {
   //   LOG_SENSOR("  ", "Current", this->current_sensor_);
   // }
-  if (this->ulp_run_duration_sensor_ != nullptr) {
-    LOG_SENSOR("  ", "Duration", this->ulp_run_duration_sensor_);
-  }
 
   if (this->is_failed()) {
     ESP_LOGE(TAG, "Component setup failed!");
