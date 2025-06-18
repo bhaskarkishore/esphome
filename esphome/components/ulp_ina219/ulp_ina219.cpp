@@ -17,6 +17,9 @@
 namespace esphome {
 namespace ulp_ina219 {
 
+RTC_DATA_ATTR double total_charge[MAX_BUS] = {0.f, 0.f};
+RTC_DATA_ATTR double total_energy[MAX_BUS] = {0.f, 0.f};
+
 extern const uint8_t lp_core_main_bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
 
@@ -74,7 +77,7 @@ esp_err_t UlpIna219::lp_core_init_(void) {
 
   ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
-  for (uint8_t i = 0; i < MAX_BUSES; ++i) {
+  for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (this->bus_enabled_[i]) {
       ESP_LOGD(TAG, "Bus %c enabled", i == 0 ? 'A' : 'B');
       ((float *) &ulp_cfg_bus_max_voltage)[i] = this->max_system_voltage_[i];
@@ -126,7 +129,7 @@ esp_err_t UlpIna219::lp_i2c_init_(void) {
 }
 
 void UlpIna219::update() {
-  for (uint8_t i = 0; i < MAX_BUSES; ++i) {
+  for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (!this->bus_enabled_[i])
       continue;
 
@@ -164,13 +167,13 @@ void UlpIna219::update() {
     }
 
     if (this->energy_sensor_[i] != nullptr) {
-      float energy = ((float *) &ulp_bus_energy)[i];
-      this->energy_sensor_[i]->publish_state(energy);
+      total_energy[i] = total_energy[i] + ((float *) &ulp_bus_energy)[i];
+      this->energy_sensor_[i]->publish_state(total_energy[i]);
     }
 
     if (this->charge_sensor_[i] != nullptr) {
-      float charge = ((float *) &ulp_bus_charge)[i];
-      this->charge_sensor_[i]->publish_state(charge);
+      total_charge[i] = total_charge[i] + ((float *) &ulp_bus_charge)[i];
+      this->charge_sensor_[i]->publish_state(total_charge[i]);
     }
 
     if (this->voltage_max_sensor_[i] != nullptr) {
@@ -202,6 +205,8 @@ void UlpIna219::update() {
       float cmin = ((float *) &ulp_bus_power_min)[i];
       this->power_min_sensor_[i]->publish_state(cmin);
     }
+
+    ((uint8_t *) &ulp_bus_reset)[i] = 1;
   }
 
   ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (double) ulp_run_duration / 1000);
@@ -227,7 +232,7 @@ void UlpIna219::dump_config() {
     ESP_LOGCONFIG(TAG, "  interval: %d", this->led_interval_);
   }
 
-  for (uint8_t i = 0; i < MAX_BUSES; ++i) {
+  for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (this->bus_enabled_[i]) {
       ESP_LOGCONFIG(TAG, "bus_%c:", i == 0 ? 'a' : 'b');
       ESP_LOGCONFIG(TAG, "  Address: %X", this->address_[i]);

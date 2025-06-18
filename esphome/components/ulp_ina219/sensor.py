@@ -59,6 +59,7 @@ from .const import (
 )
 
 DEPENDENCIES = ["esp32"]
+CODEOWNERS = ["@bhaskarkishore"]
 
 ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c"]
 
