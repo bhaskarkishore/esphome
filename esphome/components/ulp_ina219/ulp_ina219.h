@@ -149,8 +149,8 @@ class UlpIna219 : public PollingComponent {
   void set_lp_scl_pullup_en(bool lp_scl_pullup_en) { lp_scl_pullup_en_ = lp_scl_pullup_en; }
 
  protected:
-  gpio_num_t lp_sda_pin_ = GPIO_NUM_6;  // Fixed pins for c6
-  gpio_num_t lp_scl_pin_ = GPIO_NUM_7;  // Fixed pins for c6
+  gpio_num_t lp_sda_pin_ = GPIO_NUM_NC;  // Fixed pins for c6
+  gpio_num_t lp_scl_pin_ = GPIO_NUM_NC;  // Fixed pins for c6
   bool lp_sda_pullup_en_ = true;
   bool lp_scl_pullup_en_ = true;
 

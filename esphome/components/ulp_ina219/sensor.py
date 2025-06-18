@@ -3,7 +3,12 @@ import os
 from esphome import pins
 import esphome.codegen as cg
 from esphome.components import esp32, sensor
-from esphome.components.esp32 import VARIANT_ESP32C6, only_on_variant
+from esphome.components.esp32 import (
+    VARIANT_ESP32C5,
+    VARIANT_ESP32C6,
+    get_esp32_variant,
+    only_on_variant,
+)
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_ADDRESS,
@@ -40,6 +45,11 @@ from .const import (
     CONF_CURRENT_ACCUM_THRESHOLD,
     CONF_CURRENT_MAX,
     CONF_CURRENT_MIN,
+    CONF_LP_GPIO_PINS,
+    CONF_LP_SCL,
+    CONF_LP_SCL_PULLUP_ENABLED,
+    CONF_LP_SDA,
+    CONF_LP_SDA_PULLUP_ENABLED,
     CONF_POWER_ACCUM_THRESHOLD,
     CONF_POWER_MAX,
     CONF_POWER_MIN,
@@ -58,8 +68,20 @@ ulp_ina219_sensor_ns = cg.esphome_ns.namespace("ulp_ina219")
 
 UlpIna219SensorComponent = ulp_ina219_sensor_ns.class_("UlpIna219", cg.PollingComponent)
 
-# The c6 lp_core is also supported on c5 and p4 variants. These may tested and added in the future.
-SUPPORTED_VARIANTS = [VARIANT_ESP32C6]
+SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32C5]
+
+LP_PIN_CONFIG = {
+    VARIANT_ESP32C6: {
+        CONF_LP_SDA: 6,
+        CONF_LP_SCL: 7,
+        CONF_LP_GPIO_PINS: [0, 1, 2, 3, 4, 5],
+    },
+    VARIANT_ESP32C5: {
+        CONF_LP_SDA: 2,
+        CONF_LP_SCL: 3,
+        CONF_LP_GPIO_PINS: [0, 1, 4, 5, 6],
+    },
+}
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -160,9 +182,23 @@ SENSOR_SCHEMA = cv.Schema(
     }
 )
 
+
+def validate_lp_gpio_pin(value):
+    value = pins.gpio_output_pin_schema(value)
+    variant = get_esp32_variant()
+    lp_pins = LP_PIN_CONFIG.get(variant)
+    if lp_pins is None:
+        raise cv.Invalid("Unsupported variant {variant}")
+    if value["number"] not in lp_pins[CONF_LP_GPIO_PINS]:
+        raise cv.Invalid(
+            f"lp led pin must be one of gpio pins: {lp_pins[CONF_LP_GPIO_PINS]} on {variant}"
+        )
+    return value
+
+
 LED_SCHEMA = cv.Schema(
     {
-        cv.Required(CONF_PIN): pins.gpio_output_pin_schema,
+        cv.Required(CONF_PIN): validate_lp_gpio_pin,
         cv.Optional(CONF_INTERVAL, default=10): cv.All(
             cv.positive_int, cv.Range(min=0, max=255)
         ),
@@ -189,6 +225,29 @@ BUS_SCHEMA_B = (
     .extend(SENSOR_SCHEMA)
 )
 
+
+def validate_lp_sda_pin(value):
+    value = pins.gpio_output_pin_schema(value)
+    variant = get_esp32_variant()
+    lp_pins = LP_PIN_CONFIG.get(variant)
+    if lp_pins is None:
+        raise cv.Invalid("Unsupported variant {variant}")
+    if lp_pins[CONF_LP_SDA] != value["number"]:
+        raise cv.Invalid(f"lp sda pin must be gpio {lp_pins[CONF_LP_SDA]} on {variant}")
+    return value
+
+
+def validate_lp_scl_pin(value):
+    value = pins.gpio_output_pin_schema(value)
+    variant = get_esp32_variant()
+    lp_pins = LP_PIN_CONFIG.get(variant)
+    if lp_pins is None:
+        raise cv.Invalid("Unsupported variant {variant}")
+    if lp_pins[CONF_LP_SCL] != value["number"]:
+        raise cv.Invalid(f"lp scl pin must be gpio {lp_pins[CONF_LP_SCL]} on {variant}")
+    return value
+
+
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
@@ -200,6 +259,18 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SLEEP_DURATION, default="177ms"): cv.templatable(
                 cv.positive_time_period_milliseconds
             ),
+            cv.SplitDefault(
+                CONF_LP_SDA,
+                esp32_c6=LP_PIN_CONFIG[VARIANT_ESP32C6][CONF_LP_SDA],
+                esp32_c5=LP_PIN_CONFIG[VARIANT_ESP32C5][CONF_LP_SDA],
+            ): validate_lp_sda_pin,
+            cv.SplitDefault(
+                CONF_LP_SCL,
+                esp32_c6=LP_PIN_CONFIG[VARIANT_ESP32C6][CONF_LP_SCL],
+                esp32_c5=LP_PIN_CONFIG[VARIANT_ESP32C5][CONF_LP_SCL],
+            ): validate_lp_scl_pin,
+            cv.Optional(CONF_LP_SDA_PULLUP_ENABLED, default=True): cv.boolean,
+            cv.Optional(CONF_LP_SCL_PULLUP_ENABLED, default=True): cv.boolean,
         }
     ).extend(cv.polling_component_schema("60s")),
     cv.has_at_least_one_key(CONF_BUS_A, CONF_BUS_B),
@@ -254,6 +325,15 @@ async def to_code(config):
 
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+
+    cg.add(var.set_lp_sda_pullup_en(config[CONF_LP_SDA_PULLUP_ENABLED]))
+    cg.add(var.set_lp_scl_pullup_en(config[CONF_LP_SCL_PULLUP_ENABLED]))
+
+    sda = await cg.gpio_pin_expression(config[CONF_LP_SDA])
+    cg.add(var.set_lp_sda_pin(sda))
+
+    scl = await cg.gpio_pin_expression(config[CONF_LP_SCL])
+    cg.add(var.set_lp_scl_pin(scl))
 
     if CONF_LED in config:
         if CONF_PIN in config[CONF_LED]:
