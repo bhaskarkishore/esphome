@@ -47,6 +47,7 @@ void UlpIna219::setup() {
   } else {
     // Recalibrate the slow clock period
     ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
+    esp_sleep_enable_ulp_wakeup();
     ESP_LOGCONFIG(TAG, "Ulp already running");
   }
 }
