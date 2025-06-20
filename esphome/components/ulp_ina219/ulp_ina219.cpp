@@ -129,6 +129,18 @@ esp_err_t UlpIna219::lp_i2c_init_(void) {
   return lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg);
 }
 
+void UlpIna219::set_total_charge(uint8_t bus_idx, double charge) {
+  if (bus_idx < MAX_BUS) {
+    total_charge[bus_idx] = charge;
+  }
+}
+
+void UlpIna219::set_total_energy(uint8_t bus_idx, double energy) {
+  if (bus_idx < MAX_BUS) {
+    total_energy[bus_idx] = energy;
+  }
+}
+
 void UlpIna219::update() {
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (!this->bus_enabled_[i])
