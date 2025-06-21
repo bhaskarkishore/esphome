@@ -1,0 +1,59 @@
+sensor:
+  - platform: "ulp_ina219"
+    id: ina219_sensor
+    update_interval: 60s
+    bus_a:
+      address: 0x40
+      max_voltage: 5
+      max_current: 0.5
+      current:
+        name: "Bus A Current"
+      voltage:
+        name: "Bus A Voltage"
+      power:
+        name: "Bus A Power"
+      charge:
+        name: "Bus A Charge"
+      energy:
+        name: "Bus A Energy"
+      current_min:
+        name: "Bus A Current (min)"
+      current_max:
+        name: "Bus A Current (max)"
+      voltage_min:
+        name: "Bus A Voltage (min)"
+      voltage_max:
+        name: "Bus A Voltage (max)"
+      power_min:
+        name: "Bus A Power (min)"
+      power_max:
+        name: "Bus A Power (max)"
+    bus_b:
+      address: 0x41
+      max_current: 0.5
+      max_voltage: 14
+      current:
+        name: "Bus B Current"
+      voltage:
+        name: "Bus B Voltage"
+      power:
+        name: "Bus B Power"
+      charge:
+        name: "Bus B Charge"
+      energy:
+        name: "Bus B Energy"
+      current_min:
+        name: "Bus B Current (min)"
+      current_max:
+        name: "Bus B Current (max)"
+      voltage_min:
+        name: "Bus B Voltage (min)"
+      voltage_max:
+        name: "Bus B Voltage (max)"
+      power_min:
+        name: "Bus B Power (min)"
+      power_max:
+        name: "Bus B Power (max)"
+    sleep_duration: 177ms
+    led:
+      pin: GPIO2
