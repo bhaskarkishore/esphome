@@ -39,8 +39,14 @@ volatile esp_err_t bus_error_code[MAX_BUS] = {ESP_OK, ESP_OK};
 volatile uint8_t bus_reset[MAX_BUS] = {1, 1};
 volatile uint64_t bus_last_sample_time[MAX_BUS] = {0, 0};
 
-volatile float bus_charge[MAX_BUS] = {0.f, 0.f};  // in Ah
-volatile float bus_energy[MAX_BUS] = {0.f, 0.f};  // in Wh
+volatile float bus_charge_net[MAX_BUS] = {0.f, 0.f};  // in Ah
+volatile float bus_energy_net[MAX_BUS] = {0.f, 0.f};  // in Wh
+
+volatile float bus_charge_in[MAX_BUS] = {0.f, 0.f};  // in Ah
+volatile float bus_energy_in[MAX_BUS] = {0.f, 0.f};  // in Wh
+
+volatile float bus_charge_out[MAX_BUS] = {0.f, 0.f};  // in Ah
+volatile float bus_energy_out[MAX_BUS] = {0.f, 0.f};  // in Wh
 
 volatile uint32_t bus_calibration_register[MAX_BUS] = {0, 0};
 volatile uint32_t bus_current_lsb[MAX_BUS] = {0, 0};
