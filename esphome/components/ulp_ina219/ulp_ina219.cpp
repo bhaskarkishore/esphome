@@ -11,6 +11,7 @@
 #include "esphome/core/hal.h"
 #include "ulp_ina219.h"
 #include <cmath>
+#include "ulp/types.h"
 
 #define LED_GREEN GPIO_NUM_2
 
@@ -29,8 +30,9 @@ void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup...");
 
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  volatile state_t *state = ((state_t *) &ulp_state);
 
-  if (*((uint8_t *) &ulp_prg_state) == 0 || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+  if (state->prg_state == 0 || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
     ulp_lp_core_stop();
 
     esp_err_t ret = this->lp_i2c_init_();
@@ -46,7 +48,7 @@ void UlpIna219::setup() {
     ESP_LOGCONFIG(TAG, "Ulp started");
   } else {
     // Recalibrate the slow clock period
-    ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
+    state->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
     esp_sleep_enable_ulp_wakeup();
     ESP_LOGCONFIG(TAG, "Ulp already running");
   }
@@ -64,33 +66,38 @@ esp_err_t UlpIna219::lp_core_init_(void) {
     return ret;
   }
 
+  state_t *state = (state_t *) &ulp_state;
+  general_cfg_t *gcfg = (general_cfg_t *) &ulp_cfg;
+
   if (this->led_pin_ != GPIO_NUM_NC && this->led_interval_ > 0) {
     rtc_gpio_init(this->led_pin_);
     rtc_gpio_set_direction(this->led_pin_, RTC_GPIO_MODE_OUTPUT_ONLY);
     rtc_gpio_pulldown_dis(this->led_pin_);
     rtc_gpio_pullup_dis(this->led_pin_);
-    *((uint8_t *) &ulp_cfg_led_interval) = this->led_interval_;
-    *((int8_t *) &ulp_cfg_led_gpio) = this->led_pin_;
+    gcfg->led_interval = this->led_interval_;
+    gcfg->led_gpio = this->led_pin_;
   } else {
-    *((uint8_t *) &ulp_cfg_led_interval) = 0;
-    *((int8_t *) &ulp_cfg_led_gpio) = -1;
+    gcfg->led_interval = 0;
+    gcfg->led_gpio = -1;
   }
 
-  ulp_slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
+  state->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
+    bus_cfg_t *c = &((bus_cfg_t *) &ulp_bus_cfg)[i];
     if (this->bus_enabled_[i]) {
       ESP_LOGD(TAG, "Bus %c enabled", i == 0 ? 'A' : 'B');
-      ((float *) &ulp_cfg_bus_max_voltage)[i] = this->max_system_voltage_[i];
-      ((float *) &ulp_cfg_bus_max_current)[i] = this->max_system_current_[i];
-      ((uint8_t *) &ulp_cfg_bus_address)[i] = this->address_[i];
-      ((float *) &ulp_cfg_bus_shunt_resistance)[i] = this->shunt_resistance_[i];
-      ((float *) &ulp_cfg_bus_current_accum_threshold)[i] = this->current_accum_threshold_[i];
-      ((float *) &ulp_cfg_bus_power_accum_threshold)[i] = this->power_accum_threshold_[i];
-      ((uint8_t *) &ulp_bus_reset)[i] = 1;
-      ((uint32_t *) &ulp_cfg_bus_calibration_register)[i] = this->calibration_register_[i];
+      c->max_system_voltage = this->max_system_voltage_[i];
+      c->max_system_current = this->max_system_current_[i];
+      c->address = this->address_[i];
+      c->shunt_resistance = this->shunt_resistance_[i];
+      c->current_accum_threshold = this->current_accum_threshold_[i];
+      c->power_accum_threshold = this->power_accum_threshold_[i];
+      c->calibration_register = this->calibration_register_[i];
+      c->reset = 1;
+
     } else {
-      ((uint8_t *) &ulp_cfg_bus_address)[i] = 0x0;
+      c->address = 0x0;
       ESP_LOGD(TAG, "Bus %c disabled", i == 0 ? 'A' : 'B');
     }
   }
@@ -142,17 +149,21 @@ void UlpIna219::set_total_energy(uint8_t bus_idx, double energy) {
 }
 
 void UlpIna219::update() {
+  volatile state_t *state = ((state_t *) &ulp_state);
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (!this->bus_enabled_[i])
       continue;
 
+    bus_values_t *b = &((bus_values_t *) &ulp_bus)[i];
+    bus_cfg_t *c = &((bus_cfg_t *) &ulp_bus_cfg)[i];
+
     char bus = i == 0 ? 'a' : 'b';
 
     ESP_LOGD(TAG, "Bus %c:", bus);
-    ESP_LOGD(TAG, "Calibration register: %u", ((uint32_t *) &ulp_bus_calibration_register)[i]);
-    ESP_LOGD(TAG, "Current LSB: %u", ((uint32_t *) &ulp_bus_current_lsb)[i]);
+    ESP_LOGD(TAG, "Calibration register: %u", b->calibration_register);
+    ESP_LOGD(TAG, "Current LSB: %u", b->current_lsb);
 
-    esp_err_t bus_error_code = ((esp_err_t *) &ulp_bus_error_code)[i];
+    esp_err_t bus_error_code = b->error_code;
     if (bus_error_code != ESP_OK) {
       ESP_LOGD(TAG, "Bus has errors, code: 0x%X", bus_error_code);
       this->mark_failed("error reading device");
@@ -160,69 +171,59 @@ void UlpIna219::update() {
     }
 
     if (this->voltage_sensor_[i] != nullptr) {
-      float voltage = ((float *) &ulp_bus_voltage)[i];
-      this->voltage_sensor_[i]->publish_state(voltage);
+      this->voltage_sensor_[i]->publish_state(b->voltage);
     }
 
     if (this->current_sensor_[i] != nullptr) {
-      float current = ((float *) &ulp_bus_current)[i];
-      this->current_sensor_[i]->publish_state(current);
+      this->current_sensor_[i]->publish_state(b->current);
     }
 
     if (this->power_sensor_[i] != nullptr) {
-      float power = ((float *) &ulp_bus_power)[i];
-      this->power_sensor_[i]->publish_state(power);
+      this->power_sensor_[i]->publish_state(b->power);
     }
 
     if (this->shunt_voltage_sensor_[i] != nullptr) {
-      float shunt_voltage = ((float *) &ulp_bus_shunt_voltage)[i];
-      this->shunt_voltage_sensor_[i]->publish_state(shunt_voltage);
+      this->shunt_voltage_sensor_[i]->publish_state(b->shunt_voltage);
     }
 
     if (this->energy_sensor_[i] != nullptr) {
-      total_energy[i] = total_energy[i] + ((float *) &ulp_bus_energy)[i];
+      total_energy[i] = total_energy[i] + b->energy;
       this->energy_sensor_[i]->publish_state(total_energy[i]);
     }
 
     if (this->charge_sensor_[i] != nullptr) {
-      total_charge[i] = total_charge[i] + ((float *) &ulp_bus_charge)[i];
+      total_charge[i] = total_charge[i] + b->charge;
       this->charge_sensor_[i]->publish_state(total_charge[i]);
     }
 
     if (this->voltage_max_sensor_[i] != nullptr) {
-      float vmax = ((float *) &ulp_bus_voltage_max)[i];
-      this->voltage_max_sensor_[i]->publish_state(vmax);
+      this->voltage_max_sensor_[i]->publish_state(b->voltage_max);
     }
 
     if (this->voltage_min_sensor_[i] != nullptr) {
-      float vmin = ((float *) &ulp_bus_voltage_min)[i];
-      this->voltage_min_sensor_[i]->publish_state(vmin);
+      this->voltage_min_sensor_[i]->publish_state(b->voltage_min);
     }
 
     if (this->current_max_sensor_[i] != nullptr) {
-      float cmax = ((float *) &ulp_bus_current_max)[i];
-      this->current_max_sensor_[i]->publish_state(cmax);
+      this->current_max_sensor_[i]->publish_state(b->current_max);
     }
 
     if (this->current_min_sensor_[i] != nullptr) {
-      float cmin = ((float *) &ulp_bus_current_min)[i];
-      this->current_min_sensor_[i]->publish_state(cmin);
+      this->current_min_sensor_[i]->publish_state(b->current_min);
     }
 
     if (this->power_max_sensor_[i] != nullptr) {
-      float cmax = ((float *) &ulp_bus_power_max)[i];
-      this->power_max_sensor_[i]->publish_state(cmax);
+      this->power_max_sensor_[i]->publish_state(b->power_max);
     }
 
     if (this->power_min_sensor_[i] != nullptr) {
-      float cmin = ((float *) &ulp_bus_power_min)[i];
-      this->power_min_sensor_[i]->publish_state(cmin);
+      this->power_min_sensor_[i]->publish_state(b->power_min);
     }
 
-    ((uint8_t *) &ulp_bus_reset)[i] = 1;
+    c->reset = 1;
   }
 
-  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (double) ulp_run_duration / 1000);
+  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (double) state->run_duration / 1000.f);
 }
 
 void UlpIna219::dump_config() {

@@ -61,7 +61,7 @@ from .const import (
 DEPENDENCIES = ["esp32"]
 CODEOWNERS = ["@bhaskarkishore"]
 
-ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c"]
+ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c", "types.h"]
 
 BUS_KEYS = [CONF_BUS_A, CONF_BUS_B]
 
