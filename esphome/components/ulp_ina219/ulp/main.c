@@ -5,25 +5,7 @@
 #include "ina219.h"
 #include "types.h"
 
-// NOTE: All global types are uint32_t, application must handle casting
-
-// Cross processor state mangement
-#define PRG_STATE_NONE 0
-#define PRG_STATE_RUNNING 1
-#define PRG_STATE_SLEEPING 2
-
-#define SAMPLING_DELAY_WAIT 75 * 1000
-#define MAX_BUS 2
-
-// State variables
-volatile state_t state = {0};
-
-// ina219 configuration variables
-volatile bus_cfg_t bus_cfg[MAX_BUS] = {0};
-volatile general_cfg_t cfg = {0};
-
-// Output variables
-volatile bus_values_t bus[MAX_BUS] = {0};
+ulp_ina219_context_t ctx = {0};
 
 static float clamp(float value, float threshold) {
   float v = value < 0.0f ? -value : value;
@@ -58,7 +40,7 @@ static uint64_t lp_core_rtc_ticks_to_us(uint64_t ticks, uint64_t period) {
   return (ticks * period) >> RTC_CLK_CAL_FRACT;
 }
 
-static void accumulate(volatile bus_cfg_t *c, volatile bus_values_t *b, float previous_current, float previous_power,
+static void accumulate(volatile bus_config_t *c, volatile bus_values_t *b, float previous_current, float previous_power,
                        uint32_t slow_clk_period) {
   float current = clamp(b->current, c->current_accum_threshold);
   float power = clamp(b->power, c->power_accum_threshold);
@@ -91,8 +73,8 @@ static void process() {
 
   float previous_current = 0.f, previous_power = 0.f;
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
-    volatile bus_values_t *b = &bus[i];
-    volatile bus_cfg_t *c = &bus_cfg[i];
+    volatile bus_values_t *b = &ctx.buses[i].values;
+    volatile bus_config_t *c = &ctx.buses[i].config;
 
     if (c->address > 0 && b->error_code == ESP_OK) {
       previous_current = b->current;
@@ -110,7 +92,7 @@ static void process() {
       min_max(b->voltage, &b->voltage_min, &b->voltage_max, c->reset);
 
       // Accumulate current and energy
-      accumulate(c, b, previous_current, previous_power, state.slow_clk_period);
+      accumulate(c, b, previous_current, previous_power, ctx.slow_clk_period);
 
       // Clear reset if set
       c->reset = 0;
@@ -127,8 +109,9 @@ static void init() {
   uint32_t current_lsb = 0;
 
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
-    volatile bus_values_t *b = &bus[i];
-    volatile bus_cfg_t *c = &bus_cfg[i];
+    volatile bus_values_t *b = &ctx.buses[i].values;
+    volatile bus_config_t *c = &ctx.buses[i].config;
+    ;
 
     b->error_code = ESP_OK;
     if (c->address > 0) {
@@ -145,26 +128,26 @@ static void init() {
 }
 
 int main(void) {
-  state.prg_state = PRG_STATE_RUNNING;
+  ctx.prg_state = PRG_STATE_RUNNING;
   uint64_t current = lp_core_get_rtc_ticks();
 
-  if (cfg.led_interval > 0 && cfg.led_gpio > -1) {
-    if (state.led_interval_counter >= cfg.led_interval) {
-      ulp_lp_core_gpio_set_level(cfg.led_gpio, 1);
-      state.led_interval_counter = 0;
+  if (ctx.led.interval > 0 && ctx.led.pin > -1) {
+    if (ctx.led.counter >= ctx.led.interval) {
+      ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
+      ctx.led.counter = 0;
     }
   }
 
   init();
   process();
 
-  if (cfg.led_interval > 0 && cfg.led_gpio > -1) {
-    state.led_interval_counter++;
-    ulp_lp_core_gpio_set_level(cfg.led_gpio, 0);
+  if (ctx.led.interval > 0 && ctx.led.pin > -1) {
+    ctx.led.counter++;
+    ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
   }
 
-  state.run_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, state.slow_clk_period);
-  state.prg_state = PRG_STATE_SLEEPING;
+  ctx.run_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, ctx.slow_clk_period);
+  ctx.prg_state = PRG_STATE_SLEEPING;
 
   return 0;
 }

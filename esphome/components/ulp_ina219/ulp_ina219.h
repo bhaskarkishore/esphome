@@ -5,19 +5,19 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
+#include "ulp/types.h"
 
 namespace esphome {
 namespace ulp_ina219 {
 
-#define MAX_BUS 2
-
 class UlpIna219 : public PollingComponent {
  public:
-  // static const uint8_t MAX_BUS = 2;
   void setup() override;
   void update() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
+
+  static ulp_ina219_context_t *get_ulp_context();
 
   void set_voltage_sensor(uint8_t bus_idx, sensor::Sensor *voltage_sensor) {
     if (bus_idx < MAX_BUS) {

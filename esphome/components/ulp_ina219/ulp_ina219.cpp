@@ -13,8 +13,6 @@
 #include <cmath>
 #include "ulp/types.h"
 
-#define LED_GREEN GPIO_NUM_2
-
 namespace esphome {
 namespace ulp_ina219 {
 
@@ -26,13 +24,15 @@ extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
 
 static const char *const TAG = "ulp_219";
 
+ulp_ina219_context_t *UlpIna219::get_ulp_context() { return (ulp_ina219_context_t *) &ulp_ctx; }
+
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup...");
 
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-  volatile state_t *state = ((state_t *) &ulp_state);
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
 
-  if (state->prg_state == 0 || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+  if (ctx->prg_state == PRG_STATE_NONE || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
     ulp_lp_core_stop();
 
     esp_err_t ret = this->lp_i2c_init_();
@@ -48,7 +48,7 @@ void UlpIna219::setup() {
     ESP_LOGCONFIG(TAG, "Ulp started");
   } else {
     // Recalibrate the slow clock period
-    state->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
+    ctx->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
     esp_sleep_enable_ulp_wakeup();
     ESP_LOGCONFIG(TAG, "Ulp already running");
   }
@@ -66,25 +66,25 @@ esp_err_t UlpIna219::lp_core_init_(void) {
     return ret;
   }
 
-  state_t *state = (state_t *) &ulp_state;
-  general_cfg_t *gcfg = (general_cfg_t *) &ulp_cfg;
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
 
   if (this->led_pin_ != GPIO_NUM_NC && this->led_interval_ > 0) {
     rtc_gpio_init(this->led_pin_);
     rtc_gpio_set_direction(this->led_pin_, RTC_GPIO_MODE_OUTPUT_ONLY);
     rtc_gpio_pulldown_dis(this->led_pin_);
     rtc_gpio_pullup_dis(this->led_pin_);
-    gcfg->led_interval = this->led_interval_;
-    gcfg->led_gpio = this->led_pin_;
+    ctx->led.interval = this->led_interval_;
+    ctx->led.pin = this->led_pin_;
   } else {
-    gcfg->led_interval = 0;
-    gcfg->led_gpio = -1;
+    ctx->led.interval = 0;
+    ctx->led.pin = -1;
   }
 
-  state->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
+  ctx->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
-    bus_cfg_t *c = &((bus_cfg_t *) &ulp_bus_cfg)[i];
+    volatile bus_config_t *c = &ctx->buses[i].config;
+
     if (this->bus_enabled_[i]) {
       ESP_LOGD(TAG, "Bus %c enabled", i == 0 ? 'A' : 'B');
       c->max_system_voltage = this->max_system_voltage_[i];
@@ -149,13 +149,14 @@ void UlpIna219::set_total_energy(uint8_t bus_idx, double energy) {
 }
 
 void UlpIna219::update() {
-  volatile state_t *state = ((state_t *) &ulp_state);
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
+
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (!this->bus_enabled_[i])
       continue;
 
-    bus_values_t *b = &((bus_values_t *) &ulp_bus)[i];
-    bus_cfg_t *c = &((bus_cfg_t *) &ulp_bus_cfg)[i];
+    volatile bus_values_t *b = &ctx->buses[i].values;
+    volatile bus_config_t *c = &ctx->buses[i].config;
 
     char bus = i == 0 ? 'a' : 'b';
 
@@ -223,7 +224,7 @@ void UlpIna219::update() {
     c->reset = 1;
   }
 
-  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (double) state->run_duration / 1000.f);
+  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (double) ctx->run_duration / 1000.f);
 }
 
 void UlpIna219::dump_config() {
