@@ -1,4 +1,3 @@
-
 #include "ulp_lp_core_gpio.h"
 #include "soc/lp_timer_reg.h"
 #include "soc/rtc.h"
@@ -51,15 +50,15 @@ static void accumulate(volatile bus_config_t *c, volatile bus_values_t *b, float
   if (b->last_sample_time != 0 && current_time > b->last_sample_time) {
     charge = ((current + previous_current) / 2.0f) * time_delta_hours;
     energy = ((power + previous_power) / 2.0f) * time_delta_hours;
-    b->energy += energy;
-    b->charge += charge;
+    b->energy_net += energy;
+    b->charge_net += charge;
   }
 
   if (c->reset) {
     // This ensures that the present sample is not lost
     // when reset is called.
-    b->energy = energy;
-    b->charge = charge;
+    b->energy_net = energy;
+    b->charge_net = charge;
   }
 
   b->last_sample_time = current_time;

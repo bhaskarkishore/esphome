@@ -13,7 +13,6 @@ import esphome.config_validation as cv
 from esphome.const import (
     CONF_ADDRESS,
     CONF_CURRENT,
-    CONF_ENERGY,
     CONF_ID,
     CONF_INTERVAL,
     CONF_LED,
@@ -41,10 +40,11 @@ from .const import (
     CONF_BUS_A,
     CONF_BUS_B,
     CONF_CALIBRATION_REGISTER,
-    CONF_CHARGE,
+    CONF_CHARGE_NET,
     CONF_CURRENT_ACCUM_THRESHOLD,
     CONF_CURRENT_MAX,
     CONF_CURRENT_MIN,
+    CONF_ENERGY_NET,
     CONF_LP_GPIO_PINS,
     CONF_LP_SCL,
     CONF_LP_SCL_PULLUP_ENABLED,
@@ -133,12 +133,12 @@ SENSOR_SCHEMA = cv.Schema(
             device_class=DEVICE_CLASS_VOLTAGE,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
-        cv.Optional(CONF_CHARGE): sensor.sensor_schema(
+        cv.Optional(CONF_CHARGE_NET): sensor.sensor_schema(
             unit_of_measurement=UNIT_AMPS_HOURS,
             accuracy_decimals=4,
             state_class=STATE_CLASS_TOTAL,
         ),
-        cv.Optional(CONF_ENERGY): sensor.sensor_schema(
+        cv.Optional(CONF_ENERGY_NET): sensor.sensor_schema(
             unit_of_measurement=UNIT_WATT_HOURS,
             accuracy_decimals=4,
             device_class=DEVICE_CLASS_ENERGY,
@@ -293,8 +293,8 @@ SENSOR_TYPES = {
     CONF_VOLTAGE: "set_voltage_sensor",
     CONF_CURRENT: "set_current_sensor",
     CONF_POWER: "set_power_sensor",
-    CONF_ENERGY: "set_energy_sensor",
-    CONF_CHARGE: "set_charge_sensor",
+    CONF_ENERGY_NET: "set_energy_net_sensor",
+    CONF_CHARGE_NET: "set_charge_net_sensor",
     CONF_SHUNT_VOLTAGE: "set_shunt_voltage_sensor",
     CONF_VOLTAGE_MAX: "set_voltage_max_sensor",
     CONF_VOLTAGE_MIN: "set_voltage_min_sensor",

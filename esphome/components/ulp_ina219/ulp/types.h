@@ -34,8 +34,8 @@ typedef volatile struct {
   uint32_t current_lsb;
   esp_err_t error_code;
   uint64_t last_sample_time;
-  float charge;
-  float energy;
+  float charge_net;
+  float energy_net;
   float voltage_min;
   float voltage_max;
   float current_min;

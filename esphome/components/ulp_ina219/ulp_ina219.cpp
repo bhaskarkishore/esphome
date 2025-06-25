@@ -16,8 +16,8 @@
 namespace esphome {
 namespace ulp_ina219 {
 
-RTC_DATA_ATTR double total_charge[MAX_BUS] = {0.f, 0.f};
-RTC_DATA_ATTR double total_energy[MAX_BUS] = {0.f, 0.f};
+RTC_DATA_ATTR double charge_net[MAX_BUS] = {0.f, 0.f};
+RTC_DATA_ATTR double energy_net[MAX_BUS] = {0.f, 0.f};
 
 extern const uint8_t lp_core_main_bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
@@ -40,6 +40,13 @@ void UlpIna219::setup() {
       this->mark_failed("Unable to initialize ulp i2c");
       return;
     }
+
+    ret = lp_rtc_io_init_();
+    if (ret != ESP_OK) {
+      this->mark_failed("Unable to initialize ulp io");
+      return;
+    }
+
     ret = this->lp_core_init_();
     if (ret != ESP_OK) {
       this->mark_failed("Unable to initialize ulp core");
@@ -60,24 +67,12 @@ esp_err_t UlpIna219::lp_core_init_(void) {
   ulp_lp_core_cfg_t cfg = {.wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
                            .lp_timer_sleep_duration_us = this->sleep_duration_ * 1000};
 
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
+
   ret = ulp_lp_core_load_binary(lp_core_main_bin_start, (lp_core_main_bin_end - lp_core_main_bin_start));
   if (ret != ESP_OK) {
     ESP_LOGD(TAG, "Ulp binary load failed");
     return ret;
-  }
-
-  volatile ulp_ina219_context_t *ctx = get_ulp_context();
-
-  if (this->led_pin_ != GPIO_NUM_NC && this->led_interval_ > 0) {
-    rtc_gpio_init(this->led_pin_);
-    rtc_gpio_set_direction(this->led_pin_, RTC_GPIO_MODE_OUTPUT_ONLY);
-    rtc_gpio_pulldown_dis(this->led_pin_);
-    rtc_gpio_pullup_dis(this->led_pin_);
-    ctx->led.interval = this->led_interval_;
-    ctx->led.pin = this->led_pin_;
-  } else {
-    ctx->led.interval = 0;
-    ctx->led.pin = -1;
   }
 
   ctx->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
@@ -98,7 +93,7 @@ esp_err_t UlpIna219::lp_core_init_(void) {
 
     } else {
       c->address = 0x0;
-      ESP_LOGD(TAG, "Bus %c disabled", i == 0 ? 'A' : 'B');
+      ESP_LOGD(TAG, "Bus %c disabled", 'A' + i);
     }
   }
 
@@ -118,7 +113,7 @@ esp_err_t UlpIna219::lp_core_init_(void) {
   return ret;
 }
 
-esp_err_t UlpIna219::lp_i2c_init_(void) {
+esp_err_t UlpIna219::lp_i2c_init_() {
   const lp_core_i2c_cfg_t i2c_cfg = {
       .i2c_pin_cfg =
           {
@@ -136,15 +131,40 @@ esp_err_t UlpIna219::lp_i2c_init_(void) {
   return lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg);
 }
 
-void UlpIna219::set_total_charge(uint8_t bus_idx, double charge) {
+esp_err_t UlpIna219::lp_rtc_io_init_() {
+  esp_err_t ret = ESP_OK;
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
+  ctx->led.interval = 0;
+  ctx->led.pin = -1;
+
+  if (this->led_pin_ != GPIO_NUM_NC && this->led_interval_ > 0) {
+    ret = rtc_gpio_init(this->led_pin_);
+    if (ret == ESP_OK) {
+      rtc_gpio_set_direction(this->led_pin_, RTC_GPIO_MODE_OUTPUT_ONLY);
+      rtc_gpio_pulldown_dis(this->led_pin_);
+      rtc_gpio_pullup_dis(this->led_pin_);
+      ctx->led.interval = this->led_interval_;
+      ctx->led.pin = this->led_pin_;
+    }
+  }
+  return ret;
+}
+
+void UlpIna219::set_net_charge(uint8_t bus_idx, double charge) {
   if (bus_idx < MAX_BUS) {
-    total_charge[bus_idx] = charge;
+    charge_net[bus_idx] = charge;
+    if (this->charge_net_sensor_[bus_idx] != nullptr) {
+      this->charge_net_sensor_[bus_idx]->publish_state(charge_net[bus_idx]);
+    }
   }
 }
 
-void UlpIna219::set_total_energy(uint8_t bus_idx, double energy) {
+void UlpIna219::set_net_energy(uint8_t bus_idx, double energy) {
   if (bus_idx < MAX_BUS) {
-    total_energy[bus_idx] = energy;
+    energy_net[bus_idx] = energy;
+    if (this->energy_net_sensor_[bus_idx] != nullptr) {
+      this->energy_net_sensor_[bus_idx]->publish_state(energy_net[bus_idx]);
+    }
   }
 }
 
@@ -158,9 +178,7 @@ void UlpIna219::update() {
     volatile bus_values_t *b = &ctx->buses[i].values;
     volatile bus_config_t *c = &ctx->buses[i].config;
 
-    char bus = i == 0 ? 'a' : 'b';
-
-    ESP_LOGD(TAG, "Bus %c:", bus);
+    ESP_LOGD(TAG, "Bus %c:", 'A' + i);
     ESP_LOGD(TAG, "Calibration register: %u", b->calibration_register);
     ESP_LOGD(TAG, "Current LSB: %u", b->current_lsb);
 
@@ -187,14 +205,14 @@ void UlpIna219::update() {
       this->shunt_voltage_sensor_[i]->publish_state(b->shunt_voltage);
     }
 
-    if (this->energy_sensor_[i] != nullptr) {
-      total_energy[i] = total_energy[i] + b->energy;
-      this->energy_sensor_[i]->publish_state(total_energy[i]);
+    if (this->energy_net_sensor_[i] != nullptr) {
+      energy_net[i] = energy_net[i] + b->energy_net;
+      this->energy_net_sensor_[i]->publish_state(energy_net[i]);
     }
 
-    if (this->charge_sensor_[i] != nullptr) {
-      total_charge[i] = total_charge[i] + b->charge;
-      this->charge_sensor_[i]->publish_state(total_charge[i]);
+    if (this->charge_net_sensor_[i] != nullptr) {
+      charge_net[i] = charge_net[i] + b->charge_net;
+      this->charge_net_sensor_[i]->publish_state(charge_net[i]);
     }
 
     if (this->voltage_max_sensor_[i] != nullptr) {
@@ -261,8 +279,8 @@ void UlpIna219::dump_config() {
       LOG_SENSOR("  ", "Current", this->current_sensor_[i]);
       LOG_SENSOR("  ", "Power", this->power_sensor_[i]);
       LOG_SENSOR("  ", "Shunt Voltage", this->shunt_voltage_sensor_[i]);
-      LOG_SENSOR("  ", "Energy", this->energy_sensor_[i]);
-      LOG_SENSOR("  ", "Charge", this->charge_sensor_[i]);
+      LOG_SENSOR("  ", "Net Energy", this->energy_net_sensor_[i]);
+      LOG_SENSOR("  ", "Net Charge", this->charge_net_sensor_[i]);
       LOG_SENSOR("  ", "Voltage (max)", this->voltage_max_sensor_[i]);
       LOG_SENSOR("  ", "Voltage (min)", this->voltage_min_sensor_[i]);
       LOG_SENSOR("  ", "Current (max)", this->current_max_sensor_[i]);

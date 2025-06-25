@@ -43,15 +43,15 @@ class UlpIna219 : public PollingComponent {
     }
   }
 
-  void set_charge_sensor(uint8_t bus_idx, sensor::Sensor *charge_sensor) {
+  void set_charge_net_sensor(uint8_t bus_idx, sensor::Sensor *charge_net_sensor) {
     if (bus_idx < MAX_BUS) {
-      charge_sensor_[bus_idx] = charge_sensor;
+      charge_net_sensor_[bus_idx] = charge_net_sensor;
     }
   }
 
-  void set_energy_sensor(uint8_t bus_idx, sensor::Sensor *energy_sensor) {
+  void set_energy_net_sensor(uint8_t bus_idx, sensor::Sensor *energy_net_sensor) {
     if (bus_idx < MAX_BUS) {
-      energy_sensor_[bus_idx] = energy_sensor;
+      energy_net_sensor_[bus_idx] = energy_net_sensor;
     }
   }
 
@@ -144,9 +144,9 @@ class UlpIna219 : public PollingComponent {
     }
   }
 
-  void set_total_charge(uint8_t bus_idx, double charge);
+  void set_net_charge(uint8_t bus_idx, double charge);
 
-  void set_total_energy(uint8_t bus_idx, double energy);
+  void set_net_energy(uint8_t bus_idx, double energy);
 
   void set_lp_sda_pin(InternalGPIOPin *lp_sda_pin) { lp_sda_pin_ = gpio_num_t(lp_sda_pin->get_pin()); }
 
@@ -178,8 +178,8 @@ class UlpIna219 : public PollingComponent {
   sensor::Sensor *current_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *shunt_voltage_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *power_sensor_[MAX_BUS] = {nullptr, nullptr};
-  sensor::Sensor *charge_sensor_[MAX_BUS] = {nullptr, nullptr};
-  sensor::Sensor *energy_sensor_[MAX_BUS] = {nullptr, nullptr};
+  sensor::Sensor *charge_net_sensor_[MAX_BUS] = {nullptr, nullptr};
+  sensor::Sensor *energy_net_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *voltage_min_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *voltage_max_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *current_min_sensor_[MAX_BUS] = {nullptr, nullptr};
@@ -188,6 +188,7 @@ class UlpIna219 : public PollingComponent {
   sensor::Sensor *power_max_sensor_[MAX_BUS] = {nullptr, nullptr};
 
   esp_err_t lp_core_init_();
+  esp_err_t lp_rtc_io_init_();
   esp_err_t lp_i2c_init_();
 };
 }  // namespace ulp_ina219
