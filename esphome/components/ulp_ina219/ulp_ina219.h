@@ -55,6 +55,30 @@ class UlpIna219 : public PollingComponent {
     }
   }
 
+  void set_charge_out_sensor(uint8_t bus_idx, sensor::Sensor *charge_out_sensor) {
+    if (bus_idx < MAX_BUS) {
+      charge_out_sensor_[bus_idx] = charge_out_sensor;
+    }
+  }
+
+  void set_energy_out_sensor(uint8_t bus_idx, sensor::Sensor *energy_out_sensor) {
+    if (bus_idx < MAX_BUS) {
+      energy_out_sensor_[bus_idx] = energy_out_sensor;
+    }
+  }
+
+  void set_charge_in_sensor(uint8_t bus_idx, sensor::Sensor *charge_in_sensor) {
+    if (bus_idx < MAX_BUS) {
+      charge_in_sensor_[bus_idx] = charge_in_sensor;
+    }
+  }
+
+  void set_energy_in_sensor(uint8_t bus_idx, sensor::Sensor *energy_in_sensor) {
+    if (bus_idx < MAX_BUS) {
+      energy_in_sensor_[bus_idx] = energy_in_sensor;
+    }
+  }
+
   void set_voltage_min_sensor(uint8_t bus_idx, sensor::Sensor *voltage_min_sensor) {
     if (bus_idx < MAX_BUS) {
       voltage_min_sensor_[bus_idx] = voltage_min_sensor;
@@ -179,7 +203,11 @@ class UlpIna219 : public PollingComponent {
   sensor::Sensor *shunt_voltage_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *power_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *charge_net_sensor_[MAX_BUS] = {nullptr, nullptr};
+  sensor::Sensor *charge_in_sensor_[MAX_BUS] = {nullptr, nullptr};
+  sensor::Sensor *charge_out_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *energy_net_sensor_[MAX_BUS] = {nullptr, nullptr};
+  sensor::Sensor *energy_in_sensor_[MAX_BUS] = {nullptr, nullptr};
+  sensor::Sensor *energy_out_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *voltage_min_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *voltage_max_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *current_min_sensor_[MAX_BUS] = {nullptr, nullptr};

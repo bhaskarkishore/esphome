@@ -3,8 +3,8 @@
 #ifndef ULP_INA219_TYPES_H
 #define ULP_INA219_TYPES_H
 
-#define SAMPLING_DELAY_WAIT 75 * 1000
 #define MAX_BUS 2
+static const uint32_t SAMPLING_DELAY_WAIT = 75 * 1000;
 
 typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUNNING, PRG_STATE_SLEEPING } program_state_enum_t;
 
@@ -35,7 +35,11 @@ typedef volatile struct {
   esp_err_t error_code;
   uint64_t last_sample_time;
   float charge_net;
+  float charge_in;
+  float charge_out;
   float energy_net;
+  float energy_in;
+  float energy_out;
   float voltage_min;
   float voltage_max;
   float current_min;

@@ -3,16 +3,11 @@
 #include "soc/rtc.h"
 #include "ina219.h"
 #include "types.h"
+#include <math.h>
 
 ulp_ina219_context_t ctx = {0};
 
-static float clamp(float value, float threshold) {
-  float v = value < 0.0f ? -value : value;
-  if (v <= threshold) {
-    return 0.f;
-  }
-  return value;
-}
+static float clamp(float value, float threshold) { return abs(value) <= threshold ? 0.f : value; }
 
 static void min_max(float value, volatile float *min, volatile float *max, uint32_t reset) {
   if (reset) {
@@ -46,12 +41,19 @@ static void accumulate(volatile bus_config_t *c, volatile bus_values_t *b, float
   uint64_t current_time = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), slow_clk_period);
   float time_delta_hours = (current_time - b->last_sample_time) / 3600000000.0f;
 
-  float charge = 0.f, energy = 0.f;
+  float charge = 0.f, charge_in = 0.f, charge_out = 0.f, energy = 0.f, energy_in = 0.f, energy_out = 0.f;
   if (b->last_sample_time != 0 && current_time > b->last_sample_time) {
     charge = ((current + previous_current) / 2.0f) * time_delta_hours;
     energy = ((power + previous_power) / 2.0f) * time_delta_hours;
     b->energy_net += energy;
     b->charge_net += charge;
+    if (b->current < 0) {
+      b->charge_out += abs(charge);
+      b->energy_out += abs(energy);
+    } else {
+      b->charge_in += abs(charge);
+      b->energy_in += abs(energy);
+    }
   }
 
   if (c->reset) {
@@ -59,6 +61,18 @@ static void accumulate(volatile bus_config_t *c, volatile bus_values_t *b, float
     // when reset is called.
     b->energy_net = energy;
     b->charge_net = charge;
+
+    if (b->current < 0) {
+      b->charge_in = 0.f;
+      b->energy_in = 0.f;
+      b->charge_out = abs(charge);
+      b->energy_out = abs(energy);
+    } else {
+      b->charge_in = abs(charge);
+      b->energy_in = abs(energy);
+      b->charge_out = 0.f;
+      b->energy_out = 0.f;
+    }
   }
 
   b->last_sample_time = current_time;

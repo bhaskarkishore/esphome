@@ -16,8 +16,12 @@
 namespace esphome {
 namespace ulp_ina219 {
 
-RTC_DATA_ATTR double charge_net[MAX_BUS] = {0.f, 0.f};
-RTC_DATA_ATTR double energy_net[MAX_BUS] = {0.f, 0.f};
+RTC_DATA_ATTR double charge_net[MAX_BUS] = {0, 0};
+RTC_DATA_ATTR double charge_in[MAX_BUS] = {0, 0};
+RTC_DATA_ATTR double charge_out[MAX_BUS] = {0, 0};
+RTC_DATA_ATTR double energy_net[MAX_BUS] = {0, 0};
+RTC_DATA_ATTR double energy_in[MAX_BUS] = {0, 0};
+RTC_DATA_ATTR double energy_out[MAX_BUS] = {0, 0};
 
 extern const uint8_t lp_core_main_bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
@@ -206,13 +210,33 @@ void UlpIna219::update() {
     }
 
     if (this->energy_net_sensor_[i] != nullptr) {
-      energy_net[i] = energy_net[i] + b->energy_net;
+      energy_net[i] += b->energy_net;
       this->energy_net_sensor_[i]->publish_state(energy_net[i]);
     }
 
     if (this->charge_net_sensor_[i] != nullptr) {
-      charge_net[i] = charge_net[i] + b->charge_net;
+      charge_net[i] += b->charge_net;
       this->charge_net_sensor_[i]->publish_state(charge_net[i]);
+    }
+
+    if (this->energy_in_sensor_[i] != nullptr) {
+      energy_in[i] += b->energy_in;
+      this->energy_in_sensor_[i]->publish_state(energy_in[i]);
+    }
+
+    if (this->charge_in_sensor_[i] != nullptr) {
+      charge_in[i] += b->charge_in;
+      this->charge_in_sensor_[i]->publish_state(charge_in[i]);
+    }
+
+    if (this->energy_out_sensor_[i] != nullptr) {
+      energy_out[i] += b->energy_out;
+      this->energy_out_sensor_[i]->publish_state(energy_out[i]);
+    }
+
+    if (this->charge_out_sensor_[i] != nullptr) {
+      charge_out[i] += b->charge_out;
+      this->charge_out_sensor_[i]->publish_state(charge_out[i]);
     }
 
     if (this->voltage_max_sensor_[i] != nullptr) {
@@ -279,8 +303,12 @@ void UlpIna219::dump_config() {
       LOG_SENSOR("  ", "Current", this->current_sensor_[i]);
       LOG_SENSOR("  ", "Power", this->power_sensor_[i]);
       LOG_SENSOR("  ", "Shunt Voltage", this->shunt_voltage_sensor_[i]);
-      LOG_SENSOR("  ", "Net Energy", this->energy_net_sensor_[i]);
-      LOG_SENSOR("  ", "Net Charge", this->charge_net_sensor_[i]);
+      LOG_SENSOR("  ", "Energy (Net)", this->energy_net_sensor_[i]);
+      LOG_SENSOR("  ", "Energy (In)", this->energy_in_sensor_[i]);
+      LOG_SENSOR("  ", "Energy (Out)", this->energy_out_sensor_[i]);
+      LOG_SENSOR("  ", "Charge (Net)", this->charge_net_sensor_[i]);
+      LOG_SENSOR("  ", "Charge (In)", this->charge_in_sensor_[i]);
+      LOG_SENSOR("  ", "Charge (Out)", this->charge_out_sensor_[i]);
       LOG_SENSOR("  ", "Voltage (max)", this->voltage_max_sensor_[i]);
       LOG_SENSOR("  ", "Voltage (min)", this->voltage_min_sensor_[i]);
       LOG_SENSOR("  ", "Current (max)", this->current_max_sensor_[i]);
