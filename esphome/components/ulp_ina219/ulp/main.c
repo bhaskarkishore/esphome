@@ -7,7 +7,7 @@
 
 ulp_ina219_context_t ctx = {0};
 
-static float clamp(float value, float threshold) { return abs(value) <= threshold ? 0.f : value; }
+static float clamp(float value, float threshold) { return fabs(value) <= threshold ? 0.f : value; }
 
 static void min_max(float value, volatile float *min, volatile float *max, uint32_t reset) {
   if (reset) {
@@ -48,11 +48,11 @@ static void accumulate(volatile bus_config_t *c, volatile bus_values_t *b, float
     b->energy_net += energy;
     b->charge_net += charge;
     if (b->current < 0) {
-      b->charge_out += abs(charge);
-      b->energy_out += abs(energy);
+      b->charge_out += fabs(charge);
+      b->energy_out += fabs(energy);
     } else {
-      b->charge_in += abs(charge);
-      b->energy_in += abs(energy);
+      b->charge_in += fabs(charge);
+      b->energy_in += fabs(energy);
     }
   }
 
@@ -65,11 +65,11 @@ static void accumulate(volatile bus_config_t *c, volatile bus_values_t *b, float
     if (b->current < 0) {
       b->charge_in = 0.f;
       b->energy_in = 0.f;
-      b->charge_out = abs(charge);
-      b->energy_out = abs(energy);
+      b->charge_out = fabs(charge);
+      b->energy_out = fabs(energy);
     } else {
-      b->charge_in = abs(charge);
-      b->energy_in = abs(energy);
+      b->charge_in = fabs(charge);
+      b->energy_in = fabs(energy);
       b->charge_out = 0.f;
       b->energy_out = 0.f;
     }

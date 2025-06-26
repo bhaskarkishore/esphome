@@ -31,7 +31,7 @@ static const char *const TAG = "ulp_219";
 ulp_ina219_context_t *UlpIna219::get_ulp_context() { return (ulp_ina219_context_t *) &ulp_ctx; }
 
 void UlpIna219::setup() {
-  ESP_LOGCONFIG(TAG, "Running setup...");
+  ESP_LOGCONFIG(TAG, "Running setup");
 
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
@@ -45,18 +45,11 @@ void UlpIna219::setup() {
       return;
     }
 
-    ret = lp_rtc_io_init_();
-    if (ret != ESP_OK) {
-      this->mark_failed("Unable to initialize ulp io");
-      return;
-    }
-
     ret = this->lp_core_init_();
     if (ret != ESP_OK) {
       this->mark_failed("Unable to initialize ulp core");
       return;
     }
-    ESP_LOGCONFIG(TAG, "Ulp started");
   } else {
     // Recalibrate the slow clock period
     ctx->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
@@ -76,6 +69,12 @@ esp_err_t UlpIna219::lp_core_init_(void) {
   ret = ulp_lp_core_load_binary(lp_core_main_bin_start, (lp_core_main_bin_end - lp_core_main_bin_start));
   if (ret != ESP_OK) {
     ESP_LOGD(TAG, "Ulp binary load failed");
+    return ret;
+  }
+
+  ret = this->lp_rtc_io_init_();
+  if (ret != ESP_OK) {
+    this->mark_failed("Ulp io init failed");
     return ret;
   }
 
@@ -110,10 +109,10 @@ esp_err_t UlpIna219::lp_core_init_(void) {
   ret = esp_sleep_enable_ulp_wakeup();
 
   if (ret != ESP_OK) {
-    ESP_LOGD(TAG, "Ulp wake src set failed");
+    ESP_LOGD(TAG, "Ulp wake src enable failed");
     return ret;
   }
-  ESP_LOGD(TAG, "Ulp start complete");
+  ESP_LOGD(TAG, "Ulp started");
   return ret;
 }
 
@@ -182,13 +181,15 @@ void UlpIna219::update() {
     volatile bus_values_t *b = &ctx->buses[i].values;
     volatile bus_config_t *c = &ctx->buses[i].config;
 
-    ESP_LOGD(TAG, "Bus %c:", 'A' + i);
-    ESP_LOGD(TAG, "Calibration register: %u", b->calibration_register);
-    ESP_LOGD(TAG, "Current LSB: %u", b->current_lsb);
+    ESP_LOGD(TAG,
+             "Bus %c:\n"
+             "Calibration register: %u\n"
+             "Current LSB: %u\n",
+             'A' + i, b->calibration_register, b->current_lsb);
 
     esp_err_t bus_error_code = b->error_code;
     if (bus_error_code != ESP_OK) {
-      ESP_LOGD(TAG, "Bus has errors, code: 0x%X", bus_error_code);
+      ESP_LOGD(TAG, "Bus errored, code: 0x%X", bus_error_code);
       this->mark_failed("error reading device");
       continue;
     }
@@ -266,39 +267,38 @@ void UlpIna219::update() {
     c->reset = 1;
   }
 
-  ESP_LOGD(TAG, "Ulp prg run duration: %.3f", (double) ctx->run_duration / 1000.f);
+  ESP_LOGD(TAG, "ulp run duration: %.3f", (double) ctx->run_duration / 1000.f);
 }
 
 void UlpIna219::dump_config() {
-  ESP_LOGCONFIG(TAG, "ULP INA219:");
-
-  if (this->is_failed()) {
-    ESP_LOGE(TAG, ESP_LOG_MSG_COMM_FAIL);
-  }
-
-  ESP_LOGCONFIG(TAG, "Sleep Duration: %d", this->sleep_duration_);
-  ESP_LOGCONFIG(TAG, "lp_i2c:");
-  ESP_LOGCONFIG(TAG, "  SDA Pin: %d", this->lp_sda_pin_);
-  ESP_LOGCONFIG(TAG, "  SDA Pull Enabled: %d", this->lp_sda_pullup_en_);
-  ESP_LOGCONFIG(TAG, "  SCL Pin: %d", this->lp_scl_pin_);
-  ESP_LOGCONFIG(TAG, "  SCL Pull Enabled: %d", this->lp_scl_pullup_en_);
-
-  if (this->led_pin_ != GPIO_NUM_NC) {
-    ESP_LOGCONFIG(TAG, "led:");
-    ESP_LOGCONFIG(TAG, "  pin: %d", this->led_pin_);
-    ESP_LOGCONFIG(TAG, "  interval: %d", this->led_interval_);
-  }
+  ESP_LOGCONFIG(TAG,
+                "ULP INA219:\n"
+                "  Sleep Duration: %d\n"
+                "  LP I2C:\n"
+                "    SDA Pin: %d\n"
+                "    SDA Pullup Enabled: %d\n"
+                "    SCL Pin: %d\n"
+                "    SCL Pullup Enabled: %d\n"
+                "  led:\n"
+                "    pin: %d\n"
+                "    interval: %d\n",
+                this->sleep_duration_, this->lp_sda_pin_, this->lp_sda_pullup_en_, this->lp_scl_pin_,
+                this->lp_scl_pullup_en_, this->led_pin_, this->led_interval_);
 
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     if (this->bus_enabled_[i]) {
-      ESP_LOGCONFIG(TAG, "bus_%c:", i == 0 ? 'a' : 'b');
-      ESP_LOGCONFIG(TAG, "  Address: %X", this->address_[i]);
-      ESP_LOGCONFIG(TAG, "  Shunt Resistance: %f", this->shunt_resistance_[i]);
-      ESP_LOGCONFIG(TAG, "  Max Voltage: %f", this->max_system_voltage_[i]);
-      ESP_LOGCONFIG(TAG, "  Max Current: %f", this->max_system_current_[i]);
-      ESP_LOGCONFIG(TAG, "  Current Accumulation Threshold: %f", this->current_accum_threshold_[i]);
-      ESP_LOGCONFIG(TAG, "  Power Accumulation Threshold: %f", this->power_accum_threshold_[i]);
-      ESP_LOGCONFIG(TAG, "  Calibration Register: %f", this->calibration_register_[i]);
+      ESP_LOGCONFIG(TAG,
+                    "Bus %c:\n"
+                    "  Address: %X\n"
+                    "  Shunt Resistance: %f\n"
+                    "  Max Voltage: %f\n"
+                    "  Max Current: %f\n"
+                    "  Current Accumulation Threshold: %f\n"
+                    "  Power Accumulation Threshold: %f\n"
+                    "  Calibration Register: %f",
+                    'A' + i, this->address_[i], this->shunt_resistance_[i], this->max_system_voltage_[i],
+                    this->max_system_current_[i], this->current_accum_threshold_[i], this->power_accum_threshold_[i],
+                    this->calibration_register_[i]);
       LOG_SENSOR("  ", "Voltage", this->voltage_sensor_[i]);
       LOG_SENSOR("  ", "Current", this->current_sensor_[i]);
       LOG_SENSOR("  ", "Power", this->power_sensor_[i]);
@@ -319,6 +319,9 @@ void UlpIna219::dump_config() {
   }
 
   LOG_UPDATE_INTERVAL(this);
+  if (this->is_failed()) {
+    ESP_LOGE(TAG, ESP_LOG_MSG_COMM_FAIL);
+  }
 }
 
 }  // namespace ulp_ina219
