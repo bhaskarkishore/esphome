@@ -1,6 +1,6 @@
 import os
 
-from esphome import pins
+from esphome import automation, pins
 import esphome.codegen as cg
 from esphome.components import esp32, sensor
 from esphome.components.esp32 import (
@@ -15,7 +15,6 @@ from esphome.const import (
     CONF_CURRENT,
     CONF_ID,
     CONF_INTERVAL,
-    CONF_LED,
     CONF_MAX_CURRENT,
     CONF_MAX_VOLTAGE,
     CONF_PIN,
@@ -37,6 +36,7 @@ from esphome.const import (
 )
 
 from .const import (
+    CONF_ACTIVITY_LED,
     CONF_BUS_A,
     CONF_BUS_B,
     CONF_CALIBRATION_REGISTER,
@@ -72,6 +72,13 @@ BUS_KEYS = [CONF_BUS_A, CONF_BUS_B]
 ulp_ina219_sensor_ns = cg.esphome_ns.namespace("ulp_ina219")
 
 UlpIna219SensorComponent = ulp_ina219_sensor_ns.class_("UlpIna219", cg.PollingComponent)
+
+SetNetChargeAction = ulp_ina219_sensor_ns.class_(
+    "SetNetChargeAction", automation.Action
+)
+SetNetEnergyAction = ulp_ina219_sensor_ns.class_(
+    "SetNetEnergyAction", automation.Action
+)
 
 SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32C5]
 
@@ -282,7 +289,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("update_interval", default="60s"): cv.update_interval,
             cv.Optional(CONF_BUS_A): BUS_SCHEMA_A,
             cv.Optional(CONF_BUS_B): BUS_SCHEMA_B,
-            cv.Optional(CONF_LED): LED_SCHEMA,
+            cv.Optional(CONF_ACTIVITY_LED): LED_SCHEMA,
             cv.Optional(CONF_SLEEP_DURATION, default="177ms"): cv.templatable(
                 cv.positive_time_period_milliseconds
             ),
@@ -304,6 +311,47 @@ CONFIG_SCHEMA = cv.All(
     cv.only_with_esp_idf,
     only_on_variant(supported=SUPPORTED_VARIANTS),
 )
+
+SET_NET_CHARGE_ACTION_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(): cv.declare_id(SetNetChargeAction),
+        cv.GenerateID(CONF_ID): cv.use_id(UlpIna219SensorComponent),
+        cv.Required("value"): cv.float_,
+        cv.Required("bus"): cv.All(cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)),
+    }
+)
+
+SET_NET_ENERGY_ACTION_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(): cv.declare_id(SetNetEnergyAction),
+        cv.GenerateID(CONF_ID): cv.use_id(UlpIna219SensorComponent),
+        cv.Required("value"): cv.float_,
+        cv.Required("bus"): cv.All(cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)),
+    }
+)
+
+
+@automation.register_action(
+    "ulp_ina219.set_net_charge", SetNetChargeAction, SET_NET_CHARGE_ACTION_SCHEMA
+)
+async def set_net_charge_action_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    var = cg.new_Pvariable(action_id, template_arg, paren)
+    cg.add(var.set_value(config["value"]))
+    cg.add(var.set_bus_idx(config["bus"]))
+    return var
+
+
+@automation.register_action(
+    "ulp_ina219.set_net_energy", SetNetEnergyAction, SET_NET_ENERGY_ACTION_SCHEMA
+)
+async def set_net_energy_action_to_code(config, action_id, template_arg, args):
+    paren = await cg.get_variable(config[CONF_ID])
+    var = cg.new_Pvariable(action_id, template_arg, paren)
+    cg.add(var.set_value(config["value"]))
+    cg.add(var.set_bus_idx(config["bus"]))
+    return var
+
 
 CONFIG_TYPES = {
     CONF_ADDRESS: "set_address",
@@ -366,12 +414,12 @@ async def to_code(config):
     scl = await cg.gpio_pin_expression(config[CONF_LP_SCL])
     cg.add(var.set_lp_scl_pin(scl))
 
-    if CONF_LED in config:
-        if CONF_PIN in config[CONF_LED]:
-            pin = await cg.gpio_pin_expression(config[CONF_LED][CONF_PIN])
+    if CONF_ACTIVITY_LED in config:
+        if CONF_PIN in config[CONF_ACTIVITY_LED]:
+            pin = await cg.gpio_pin_expression(config[CONF_ACTIVITY_LED][CONF_PIN])
             cg.add(var.set_led_pin(pin))
-        if CONF_INTERVAL in config[CONF_LED]:
-            cg.add(var.set_led_interval(config[CONF_LED][CONF_INTERVAL]))
+        if CONF_INTERVAL in config[CONF_ACTIVITY_LED]:
+            cg.add(var.set_led_interval(config[CONF_ACTIVITY_LED][CONF_INTERVAL]))
 
     if CONF_SLEEP_DURATION in config:
         cg.add(var.set_sleep_duration(config[CONF_SLEEP_DURATION]))

@@ -219,6 +219,39 @@ class UlpIna219 : public PollingComponent {
   esp_err_t lp_rtc_io_init_();
   esp_err_t lp_i2c_init_();
 };
+
+template<typename... Ts> class SetNetChargeAction : public Action<Ts...> {
+ public:
+  SetNetChargeAction(UlpIna219 *parent) : parent_(parent) {}
+
+  void set_bus_idx(uint8_t bus_idx) { this->bus_idx_ = bus_idx; }
+
+  void set_value(float value) { this->value_ = value; }
+
+  void play(Ts... x) override { this->parent_->set_net_charge(this->bus_idx_, this->value_); }
+
+ protected:
+  UlpIna219 *parent_;
+  float value_;
+  uint8_t bus_idx_;
+};
+
+template<typename... Ts> class SetNetEnergyAction : public Action<Ts...> {
+ public:
+  SetNetEnergyAction(UlpIna219 *parent) : parent_(parent) {}
+
+  void set_bus_idx(uint8_t bus_idx) { this->bus_idx_ = bus_idx; }
+
+  void set_value(float value) { this->value_ = value; }
+
+  void play(Ts... x) override { this->parent_->set_net_energy(this->bus_idx_, this->value_); }
+
+ protected:
+  UlpIna219 *parent_;
+  float value_;
+  uint8_t bus_idx_;
+};
+
 }  // namespace ulp_ina219
 }  // namespace esphome
 
