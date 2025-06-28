@@ -28,7 +28,7 @@ extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
 
 static const char *const TAG = "ulp_219";
 
-ulp_ina219_context_t *UlpIna219::get_ulp_context() { return (ulp_ina219_context_t *) &ulp_ctx; }
+ulp_ina219_context_t *UlpIna219::get_ulp_context() { return reinterpret_cast<ulp_ina219_context_t *>(&ulp_ctx); }
 
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup");
@@ -151,6 +151,32 @@ esp_err_t UlpIna219::lp_rtc_io_init_() {
     }
   }
   return ret;
+}
+
+void UlpIna219::reset_accumulators(uint8_t bus_idx) {
+  if (bus_idx < MAX_BUS) {
+    charge_in[bus_idx] = charge_out[bus_idx] = charge_net[bus_idx] = 0;
+    energy_in[bus_idx] = energy_out[bus_idx] = energy_net[bus_idx] = 0;
+
+    if (this->charge_net_sensor_[bus_idx] != nullptr) {
+      this->charge_net_sensor_[bus_idx]->publish_state(charge_net[bus_idx]);
+    }
+    if (this->charge_in_sensor_[bus_idx] != nullptr) {
+      this->charge_in_sensor_[bus_idx]->publish_state(charge_in[bus_idx]);
+    }
+    if (this->charge_out_sensor_[bus_idx] != nullptr) {
+      this->charge_out_sensor_[bus_idx]->publish_state(charge_out[bus_idx]);
+    }
+    if (this->energy_net_sensor_[bus_idx] != nullptr) {
+      this->energy_net_sensor_[bus_idx]->publish_state(energy_net[bus_idx]);
+    }
+    if (this->energy_in_sensor_[bus_idx] != nullptr) {
+      this->energy_in_sensor_[bus_idx]->publish_state(energy_in[bus_idx]);
+    }
+    if (this->energy_out_sensor_[bus_idx] != nullptr) {
+      this->energy_out_sensor_[bus_idx]->publish_state(energy_out[bus_idx]);
+    }
+  }
 }
 
 void UlpIna219::set_net_charge(uint8_t bus_idx, double charge) {

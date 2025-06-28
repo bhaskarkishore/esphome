@@ -22,6 +22,7 @@ from esphome.const import (
     CONF_SHUNT_RESISTANCE,
     CONF_SHUNT_VOLTAGE,
     CONF_SLEEP_DURATION,
+    CONF_VALUE,
     CONF_VOLTAGE,
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_ENERGY,
@@ -37,6 +38,7 @@ from esphome.const import (
 
 from .const import (
     CONF_ACTIVITY_LED,
+    CONF_BUS,
     CONF_BUS_A,
     CONF_BUS_B,
     CONF_CALIBRATION_REGISTER,
@@ -63,7 +65,6 @@ from .const import (
 )
 
 DEPENDENCIES = ["esp32"]
-CODEOWNERS = ["@bhaskarkishore"]
 
 ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c", "types.h"]
 
@@ -76,8 +77,13 @@ UlpIna219SensorComponent = ulp_ina219_sensor_ns.class_("UlpIna219", cg.PollingCo
 SetNetChargeAction = ulp_ina219_sensor_ns.class_(
     "SetNetChargeAction", automation.Action
 )
+
 SetNetEnergyAction = ulp_ina219_sensor_ns.class_(
     "SetNetEnergyAction", automation.Action
+)
+
+ResetAccumulatorsAction = ulp_ina219_sensor_ns.class_(
+    "ResetAccumulatorsAction", automation.Action
 )
 
 SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32C5]
@@ -314,20 +320,32 @@ CONFIG_SCHEMA = cv.All(
 
 SET_NET_CHARGE_ACTION_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(): cv.declare_id(SetNetChargeAction),
-        cv.GenerateID(CONF_ID): cv.use_id(UlpIna219SensorComponent),
-        cv.Required("value"): cv.float_,
-        cv.Required("bus"): cv.All(cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)),
+        cv.GenerateID(): cv.use_id(UlpIna219SensorComponent),
+        cv.Required(CONF_VALUE): cv.float_,
+        cv.Required(CONF_BUS): cv.All(
+            cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)
+        ),
     }
 )
 
 SET_NET_ENERGY_ACTION_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(): cv.declare_id(SetNetEnergyAction),
-        cv.GenerateID(CONF_ID): cv.use_id(UlpIna219SensorComponent),
-        cv.Required("value"): cv.float_,
-        cv.Required("bus"): cv.All(cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)),
+        cv.GenerateID(): cv.use_id(UlpIna219SensorComponent),
+        cv.Required(CONF_VALUE): cv.float_,
+        cv.Required(CONF_BUS): cv.All(
+            cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)
+        ),
     }
+)
+
+RESET_ACCUMULATORS_ACTION_SCHEMA = cv.maybe_simple_value(
+    {
+        cv.GenerateID(): cv.use_id(UlpIna219SensorComponent),
+        cv.Required(CONF_BUS): cv.All(
+            cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)
+        ),
+    },
+    key=CONF_BUS,
 )
 
 
@@ -335,10 +353,10 @@ SET_NET_ENERGY_ACTION_SCHEMA = cv.Schema(
     "ulp_ina219.set_net_charge", SetNetChargeAction, SET_NET_CHARGE_ACTION_SCHEMA
 )
 async def set_net_charge_action_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    var = cg.new_Pvariable(action_id, template_arg, paren)
-    cg.add(var.set_value(config["value"]))
-    cg.add(var.set_bus_idx(config["bus"]))
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    cg.add(var.set_value(config[CONF_VALUE]))
+    cg.add(var.set_bus_idx(config[CONF_BUS]))
     return var
 
 
@@ -346,10 +364,22 @@ async def set_net_charge_action_to_code(config, action_id, template_arg, args):
     "ulp_ina219.set_net_energy", SetNetEnergyAction, SET_NET_ENERGY_ACTION_SCHEMA
 )
 async def set_net_energy_action_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    var = cg.new_Pvariable(action_id, template_arg, paren)
-    cg.add(var.set_value(config["value"]))
-    cg.add(var.set_bus_idx(config["bus"]))
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    cg.add(var.set_value(config[CONF_VALUE]))
+    cg.add(var.set_bus_idx(config[CONF_BUS]))
+    return var
+
+
+@automation.register_action(
+    "ulp_ina219.reset_accumulators",
+    ResetAccumulatorsAction,
+    RESET_ACCUMULATORS_ACTION_SCHEMA,
+)
+async def set_reset_accumulators_action_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    cg.add(var.set_bus_idx(config[CONF_BUS]))
     return var
 
 

@@ -172,6 +172,8 @@ class UlpIna219 : public PollingComponent {
 
   void set_net_energy(uint8_t bus_idx, double energy);
 
+  void reset_accumulators(uint8_t bus_idx);
+
   void set_lp_sda_pin(InternalGPIOPin *lp_sda_pin) { lp_sda_pin_ = gpio_num_t(lp_sda_pin->get_pin()); }
 
   void set_lp_scl_pin(InternalGPIOPin *lp_scl_pin) { lp_scl_pin_ = gpio_num_t(lp_scl_pin->get_pin()); }
@@ -220,36 +222,27 @@ class UlpIna219 : public PollingComponent {
   esp_err_t lp_i2c_init_();
 };
 
-template<typename... Ts> class SetNetChargeAction : public Action<Ts...> {
+template<typename... Ts> class SetNetChargeAction : public Action<Ts...>, public Parented<UlpIna219> {
  public:
-  SetNetChargeAction(UlpIna219 *parent) : parent_(parent) {}
+  TEMPLATABLE_VALUE(uint8_t, bus_idx)
+  TEMPLATABLE_VALUE(float, value)
 
-  void set_bus_idx(uint8_t bus_idx) { this->bus_idx_ = bus_idx; }
-
-  void set_value(float value) { this->value_ = value; }
-
-  void play(Ts... x) override { this->parent_->set_net_charge(this->bus_idx_, this->value_); }
-
- protected:
-  UlpIna219 *parent_;
-  float value_;
-  uint8_t bus_idx_;
+  void play(Ts... x) override { this->parent_->set_net_charge(this->bus_idx_.value(x...), this->value_.value(x...)); }
 };
 
-template<typename... Ts> class SetNetEnergyAction : public Action<Ts...> {
+template<typename... Ts> class SetNetEnergyAction : public Action<Ts...>, public Parented<UlpIna219> {
  public:
-  SetNetEnergyAction(UlpIna219 *parent) : parent_(parent) {}
+  TEMPLATABLE_VALUE(uint8_t, bus_idx)
+  TEMPLATABLE_VALUE(float, value)
 
-  void set_bus_idx(uint8_t bus_idx) { this->bus_idx_ = bus_idx; }
+  void play(Ts... x) override { this->parent_->set_net_energy(this->bus_idx_.value(x...), this->value_.value(x...)); }
+};
 
-  void set_value(float value) { this->value_ = value; }
+template<typename... Ts> class ResetAccumulatorsAction : public Action<Ts...>, public Parented<UlpIna219> {
+ public:
+  TEMPLATABLE_VALUE(uint8_t, bus_idx)
 
-  void play(Ts... x) override { this->parent_->set_net_energy(this->bus_idx_, this->value_); }
-
- protected:
-  UlpIna219 *parent_;
-  float value_;
-  uint8_t bus_idx_;
+  void play(Ts... x) override { this->parent_->reset_accumulators(this->bus_idx_.value(x...)); }
 };
 
 }  // namespace ulp_ina219
