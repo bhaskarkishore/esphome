@@ -1,7 +1,9 @@
 #pragma once
 
-#ifndef ULP_INA219_TYPES_H
-#define ULP_INA219_TYPES_H
+#ifndef ULPINA219_ULP_TYPES_H
+#define ULPINA219_ULP_TYPES_H
+
+#include "esp_err.h"
 
 #define MAX_BUS 2
 static const uint32_t SAMPLING_DELAY_WAIT = 75 * 1000;
@@ -61,4 +63,4 @@ typedef volatile struct {
   program_state_enum_t prg_state;
 } ulp_ina219_context_t;
 
-#endif  // ULP_INA219_TYPES_H
+#endif  // ULPINA219_ULP_TYPES_H

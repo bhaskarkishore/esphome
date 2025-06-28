@@ -1,3 +1,5 @@
+#include "ulp_lp_core_utils.h"
+#include "ulp_lp_core_i2c.h"
 #include "ina219.h"
 #include "i2c.h"
 

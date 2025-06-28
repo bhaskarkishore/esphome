@@ -4,6 +4,7 @@
 #include "ina219.h"
 #include "types.h"
 #include <math.h>
+#include "esp_err.h"
 
 ulp_ina219_context_t ctx = {0};
 

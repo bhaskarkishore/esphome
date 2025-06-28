@@ -11,7 +11,9 @@
 #include "esphome/core/hal.h"
 #include "ulp_ina219.h"
 #include <cmath>
+extern "C" {
 #include "ulp/types.h"
+}
 
 namespace esphome {
 namespace ulp_ina219 {

@@ -1,5 +1,8 @@
 #include "i2c.h"
 
+#include "ulp_lp_core_i2c.h"
+#include "ulp_lp_core_utils.h"
+
 esp_err_t i2c_write(uint16_t address, uint8_t *data, size_t len) {
   return lp_core_i2c_master_write_to_device(LP_I2C_NUM_0, address, data, len, LP_I2C_TRANS_TIMEOUT_LP_CYCLES);
 }
