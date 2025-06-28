@@ -5,9 +5,18 @@
 
 #include "esp_err.h"
 
-#define MAX_BUS 2
+#ifdef __cplusplus
+namespace esphome {
+namespace ulp_ina219 {
+#endif
+
+#define MAX_BUS (2)
 static const uint32_t SAMPLING_DELAY_WAIT = 75 * 1000;
 
+// The following code is shared between the ulp and hp cpus.
+// The ulp code is compiled using a C compiler where modern
+// language features may not be supported.
+// NOLINTBEGIN(modernize-use-using)
 typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUNNING, PRG_STATE_SLEEPING } program_state_enum_t;
 
 typedef struct {
@@ -62,5 +71,12 @@ typedef volatile struct {
   uint32_t slow_clk_period;
   program_state_enum_t prg_state;
 } ulp_ina219_context_t;
+
+// NOLINTEND(modernize-use-using)
+
+#ifdef __cplusplus
+}  // namespace ulp_ina219
+}  // namespace esphome
+#endif
 
 #endif  // ULPINA219_ULP_TYPES_H

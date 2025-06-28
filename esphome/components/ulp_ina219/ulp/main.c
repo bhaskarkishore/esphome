@@ -1,5 +1,6 @@
 #include "ulp_lp_core_gpio.h"
 #include "soc/lp_timer_reg.h"
+#include "ulp_lp_core_utils.h"
 #include "soc/rtc.h"
 #include "ina219.h"
 #include "types.h"

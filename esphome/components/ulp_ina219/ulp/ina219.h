@@ -5,6 +5,12 @@
 
 #include "esp_err.h"
 
+// required for clang-tidy
+#ifdef __cplusplus
+namespace esphome {
+namespace ulp_ina219 {
+#endif
+
 static const uint8_t INA219_REGISTER_CONFIG = 0x0;
 static const uint8_t INA219_REGISTER_SHUNT_VOLTAGE = 0x01;
 static const uint8_t INA219_REGISTER_BUS_VOLTAGE = 0x02;
@@ -24,5 +30,10 @@ esp_err_t ina219_current(uint8_t address, volatile float *current, uint32_t curr
 esp_err_t ina219_shunt_voltage(uint8_t address, volatile float *shunt_voltage);
 
 esp_err_t ina219_power(uint8_t address, volatile float *power, uint32_t current_lsb);
+
+#ifdef __cplusplus
+}  // namespace ulp_ina219
+}  // namespace esphome
+#endif
 
 #endif
