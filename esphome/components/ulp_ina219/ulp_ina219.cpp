@@ -17,13 +17,6 @@
 namespace esphome {
 namespace ulp_ina219 {
 
-RTC_DATA_ATTR double charge_net[MAX_BUS] = {0, 0};
-RTC_DATA_ATTR double charge_in[MAX_BUS] = {0, 0};
-RTC_DATA_ATTR double charge_out[MAX_BUS] = {0, 0};
-RTC_DATA_ATTR double energy_net[MAX_BUS] = {0, 0};
-RTC_DATA_ATTR double energy_in[MAX_BUS] = {0, 0};
-RTC_DATA_ATTR double energy_out[MAX_BUS] = {0, 0};
-
 // The following is defined by the esp idf sdk as part of the ulp build process
 // and cannot be altered to satisfy the linter.
 // NOLINTBEGIN(readability-identifier-naming)
@@ -160,44 +153,54 @@ esp_err_t UlpIna219::lp_rtc_io_init_() {
 
 void UlpIna219::reset_accumulators(uint8_t bus_idx) {
   if (bus_idx < MAX_BUS) {
-    charge_in[bus_idx] = charge_out[bus_idx] = charge_net[bus_idx] = 0;
-    energy_in[bus_idx] = energy_out[bus_idx] = energy_net[bus_idx] = 0;
+    volatile ulp_ina219_context_t *ctx = get_ulp_context();
+    volatile bus_values_t *b = &ctx->buses[bus_idx].values;
+    b->charge_in = 0;
+    b->charge_out = 0;
+    b->charge_net = 0;
+    b->energy_in = 0;
+    b->energy_out = 0;
+    b->energy_net = 0;
 
     if (this->charge_net_sensor_[bus_idx] != nullptr) {
-      this->charge_net_sensor_[bus_idx]->publish_state(charge_net[bus_idx]);
+      this->charge_net_sensor_[bus_idx]->publish_state(b->charge_net);
     }
     if (this->charge_in_sensor_[bus_idx] != nullptr) {
-      this->charge_in_sensor_[bus_idx]->publish_state(charge_in[bus_idx]);
+      this->charge_in_sensor_[bus_idx]->publish_state(b->charge_in);
     }
     if (this->charge_out_sensor_[bus_idx] != nullptr) {
-      this->charge_out_sensor_[bus_idx]->publish_state(charge_out[bus_idx]);
+      this->charge_out_sensor_[bus_idx]->publish_state(b->charge_out);
     }
     if (this->energy_net_sensor_[bus_idx] != nullptr) {
-      this->energy_net_sensor_[bus_idx]->publish_state(energy_net[bus_idx]);
+      this->energy_net_sensor_[bus_idx]->publish_state(b->energy_net);
     }
     if (this->energy_in_sensor_[bus_idx] != nullptr) {
-      this->energy_in_sensor_[bus_idx]->publish_state(energy_in[bus_idx]);
+      this->energy_in_sensor_[bus_idx]->publish_state(b->energy_in);
     }
     if (this->energy_out_sensor_[bus_idx] != nullptr) {
-      this->energy_out_sensor_[bus_idx]->publish_state(energy_out[bus_idx]);
+      this->energy_out_sensor_[bus_idx]->publish_state(b->energy_out);
     }
   }
 }
 
 void UlpIna219::set_net_charge(uint8_t bus_idx, double charge) {
   if (bus_idx < MAX_BUS) {
-    charge_net[bus_idx] = charge;
+    volatile ulp_ina219_context_t *ctx = get_ulp_context();
+    volatile bus_values_t *b = &ctx->buses[bus_idx].values;
+    b->charge_net = charge;
     if (this->charge_net_sensor_[bus_idx] != nullptr) {
-      this->charge_net_sensor_[bus_idx]->publish_state(charge_net[bus_idx]);
+      this->charge_net_sensor_[bus_idx]->publish_state(b->charge_net);
     }
   }
 }
 
 void UlpIna219::set_net_energy(uint8_t bus_idx, double energy) {
   if (bus_idx < MAX_BUS) {
-    energy_net[bus_idx] = energy;
+    volatile ulp_ina219_context_t *ctx = get_ulp_context();
+    volatile bus_values_t *b = &ctx->buses[bus_idx].values;
+    b->energy_net = energy;
     if (this->energy_net_sensor_[bus_idx] != nullptr) {
-      this->energy_net_sensor_[bus_idx]->publish_state(energy_net[bus_idx]);
+      this->energy_net_sensor_[bus_idx]->publish_state(b->energy_net);
     }
   }
 }
@@ -242,33 +245,27 @@ void UlpIna219::update() {
     }
 
     if (this->energy_net_sensor_[i] != nullptr) {
-      energy_net[i] += b->energy_net;
-      this->energy_net_sensor_[i]->publish_state(energy_net[i]);
+      this->energy_net_sensor_[i]->publish_state(b->energy_net);
     }
 
     if (this->charge_net_sensor_[i] != nullptr) {
-      charge_net[i] += b->charge_net;
-      this->charge_net_sensor_[i]->publish_state(charge_net[i]);
+      this->charge_net_sensor_[i]->publish_state(b->charge_net);
     }
 
     if (this->energy_in_sensor_[i] != nullptr) {
-      energy_in[i] += b->energy_in;
-      this->energy_in_sensor_[i]->publish_state(energy_in[i]);
+      this->energy_in_sensor_[i]->publish_state(b->energy_in);
     }
 
     if (this->charge_in_sensor_[i] != nullptr) {
-      charge_in[i] += b->charge_in;
-      this->charge_in_sensor_[i]->publish_state(charge_in[i]);
+      this->charge_in_sensor_[i]->publish_state(b->charge_in);
     }
 
     if (this->energy_out_sensor_[i] != nullptr) {
-      energy_out[i] += b->energy_out;
-      this->energy_out_sensor_[i]->publish_state(energy_out[i]);
+      this->energy_out_sensor_[i]->publish_state(b->energy_out);
     }
 
     if (this->charge_out_sensor_[i] != nullptr) {
-      charge_out[i] += b->charge_out;
-      this->charge_out_sensor_[i]->publish_state(charge_out[i]);
+      this->charge_out_sensor_[i]->publish_state(b->charge_out);
     }
 
     if (this->voltage_max_sensor_[i] != nullptr) {
@@ -294,8 +291,6 @@ void UlpIna219::update() {
     if (this->power_min_sensor_[i] != nullptr) {
       this->power_min_sensor_[i]->publish_state(b->power_min);
     }
-
-    c->reset = 1;
   }
 
   ESP_LOGD(TAG, "ulp run duration: %.3f", (double) ctx->run_duration / 1000.f);

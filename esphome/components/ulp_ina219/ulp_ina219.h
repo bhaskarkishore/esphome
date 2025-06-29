@@ -17,8 +17,6 @@ class UlpIna219 : public PollingComponent {
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
 
-  static ulp_ina219_context_t *get_ulp_context();
-
   void set_voltage_sensor(uint8_t bus_idx, sensor::Sensor *voltage_sensor) {
     if (bus_idx < MAX_BUS) {
       voltage_sensor_[bus_idx] = voltage_sensor;
@@ -199,6 +197,8 @@ class UlpIna219 : public PollingComponent {
   float current_accum_threshold_[MAX_BUS] = {0.f, 0.f};
   float power_accum_threshold_[MAX_BUS] = {0.f, 0.f};
   float calibration_register_[MAX_BUS] = {0, 0};
+
+  static ulp_ina219_context_t *get_ulp_context();
 
   sensor::Sensor *voltage_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *current_sensor_[MAX_BUS] = {nullptr, nullptr};

@@ -26,31 +26,31 @@ typedef struct {
 } activity_led_t;
 
 typedef volatile struct {
-  uint8_t address;
-  uint8_t reset;
+  uint32_t calibration_register;
   float max_system_voltage;
   float max_system_current;
   float shunt_resistance;
   float current_accum_threshold;
   float power_accum_threshold;
-  uint32_t calibration_register;
+  uint8_t address;
+  uint8_t reset;
 } bus_config_t;
 
 typedef volatile struct {
+  uint64_t last_sample_time;
+  double charge_net;
+  double charge_in;
+  double charge_out;
+  double energy_net;
+  double energy_in;
+  double energy_out;
+  uint32_t calibration_register;
+  uint32_t current_lsb;
+  esp_err_t error_code;
   float voltage;
   float current;
   float power;
   float shunt_voltage;
-  uint32_t calibration_register;
-  uint32_t current_lsb;
-  esp_err_t error_code;
-  uint64_t last_sample_time;
-  float charge_net;
-  float charge_in;
-  float charge_out;
-  float energy_net;
-  float energy_in;
-  float energy_out;
   float voltage_min;
   float voltage_max;
   float current_min;
