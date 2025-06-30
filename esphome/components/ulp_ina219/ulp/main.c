@@ -126,7 +126,6 @@ static void init() {
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile bus_values_t *b = &ctx.buses[i].values;
     volatile bus_config_t *c = &ctx.buses[i].config;
-    ;
 
     b->error_code = ESP_OK;
     if (c->address > 0) {
@@ -145,8 +144,9 @@ static void init() {
 int main(void) {
   ctx.prg_state = PRG_STATE_RUNNING;
   uint64_t current = lp_core_get_rtc_ticks();
+  bool led_active = ctx.led.interval > 0 && ctx.led.pin > -1;
 
-  if (ctx.led.interval > 0 && ctx.led.pin > -1) {
+  if (led_active) {
     if (ctx.led.counter >= ctx.led.interval) {
       ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
       ctx.led.counter = 0;
@@ -156,7 +156,7 @@ int main(void) {
   init();
   process();
 
-  if (ctx.led.interval > 0 && ctx.led.pin > -1) {
+  if (led_active) {
     ctx.led.counter++;
     ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
   }
