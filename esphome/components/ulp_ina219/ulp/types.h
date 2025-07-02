@@ -11,6 +11,7 @@ namespace ulp_ina219 {
 #endif
 
 #define MAX_BUS (2)
+#define MAX_TRIGGERS (3)
 static const uint32_t SAMPLING_DELAY_WAIT = 75 * 1000;
 
 // The following code is shared between the ulp and hp cpus.
@@ -18,6 +19,33 @@ static const uint32_t SAMPLING_DELAY_WAIT = 75 * 1000;
 // language features may not be supported.
 // NOLINTBEGIN(modernize-use-using)
 typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUNNING, PRG_STATE_SLEEPING } program_state_enum_t;
+
+typedef enum {
+  TRIG_MODE_NONE = 0,
+  TRIG_MODE_VOLTAGE,
+  TRIG_MODE_CURRENT,
+  TRIG_MODE_CHARGE,
+  TRIG_MODE_ENERGY,
+  TRIG_MODE_CHARGE_DELTA,
+  TRIG_MODE_ENERGY_DELTA
+} wake_trigger_mode_enum_t;
+
+typedef enum { TRIG_NOT_SET = 0, TRIG_SET, TRIG_TRIGGERED } wake_trigger_state_enum_t;
+
+typedef struct {
+  wake_trigger_mode_enum_t mode;
+  wake_trigger_state_enum_t status;
+  union {
+    struct {
+      float above;
+      float below;
+    } range;
+    struct {
+      double current;
+      double threshold;
+    } accum;
+  } conditions;
+} wake_trigger_t;
 
 typedef struct {
   int8_t pin;
@@ -62,6 +90,7 @@ typedef volatile struct {
 typedef volatile struct {
   bus_config_t config;
   bus_values_t values;
+  wake_trigger_t triggers[MAX_TRIGGERS];
 } bus_t;
 
 typedef volatile struct {

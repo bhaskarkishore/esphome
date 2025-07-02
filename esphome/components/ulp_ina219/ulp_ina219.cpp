@@ -151,35 +151,12 @@ esp_err_t UlpIna219::lp_rtc_io_init_() {
   return ret;
 }
 
-void UlpIna219::reset_accumulators(uint8_t bus_idx) {
+void UlpIna219::reset_values(uint8_t bus_idx) {
   if (bus_idx < MAX_BUS) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
-    volatile bus_values_t *b = &ctx->buses[bus_idx].values;
-    b->charge_in = 0;
-    b->charge_out = 0;
-    b->charge_net = 0;
-    b->energy_in = 0;
-    b->energy_out = 0;
-    b->energy_net = 0;
-
-    if (this->charge_net_sensor_[bus_idx] != nullptr) {
-      this->charge_net_sensor_[bus_idx]->publish_state(b->charge_net);
-    }
-    if (this->charge_in_sensor_[bus_idx] != nullptr) {
-      this->charge_in_sensor_[bus_idx]->publish_state(b->charge_in);
-    }
-    if (this->charge_out_sensor_[bus_idx] != nullptr) {
-      this->charge_out_sensor_[bus_idx]->publish_state(b->charge_out);
-    }
-    if (this->energy_net_sensor_[bus_idx] != nullptr) {
-      this->energy_net_sensor_[bus_idx]->publish_state(b->energy_net);
-    }
-    if (this->energy_in_sensor_[bus_idx] != nullptr) {
-      this->energy_in_sensor_[bus_idx]->publish_state(b->energy_in);
-    }
-    if (this->energy_out_sensor_[bus_idx] != nullptr) {
-      this->energy_out_sensor_[bus_idx]->publish_state(b->energy_out);
-    }
+    volatile bus_config_t *c = &ctx->buses[bus_idx].config;
+    c->reset = 1;
+    this->update();
   }
 }
 
@@ -293,7 +270,12 @@ void UlpIna219::update() {
     }
   }
 
-  ESP_LOGD(TAG, "ulp run duration: %.3f", (double) ctx->run_duration / 1000.f);
+  ESP_LOGD(TAG,
+           "ulp debug:"
+           "  run dur: %.3f\n"
+           "  slow clk: %u\n"
+           "  state: %u\n",
+           "  led cntr: %u", ctx->run_duration / 1000.f, ctx->slow_clk_period, ctx->prg_state, ctx->led.counter);
 }
 
 void UlpIna219::dump_config() {

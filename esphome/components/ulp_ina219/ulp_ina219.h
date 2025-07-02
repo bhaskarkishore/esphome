@@ -170,7 +170,7 @@ class UlpIna219 : public PollingComponent {
 
   void set_net_energy(uint8_t bus_idx, double energy);
 
-  void reset_accumulators(uint8_t bus_idx);
+  void reset_values(uint8_t bus_idx);
 
   void set_lp_sda_pin(InternalGPIOPin *lp_sda_pin) { lp_sda_pin_ = gpio_num_t(lp_sda_pin->get_pin()); }
 
@@ -238,11 +238,11 @@ template<typename... Ts> class SetNetEnergyAction : public Action<Ts...>, public
   void play(Ts... x) override { this->parent_->set_net_energy(this->bus_idx_.value(x...), this->value_.value(x...)); }
 };
 
-template<typename... Ts> class ResetAccumulatorsAction : public Action<Ts...>, public Parented<UlpIna219> {
+template<typename... Ts> class ResetValuesAction : public Action<Ts...>, public Parented<UlpIna219> {
  public:
   TEMPLATABLE_VALUE(uint8_t, bus_idx)
 
-  void play(Ts... x) override { this->parent_->reset_accumulators(this->bus_idx_.value(x...)); }
+  void play(Ts... x) override { this->parent_->reset_values(this->bus_idx_.value(x...)); }
 };
 
 }  // namespace ulp_ina219

@@ -82,9 +82,7 @@ SetNetEnergyAction = ulp_ina219_sensor_ns.class_(
     "SetNetEnergyAction", automation.Action
 )
 
-ResetAccumulatorsAction = ulp_ina219_sensor_ns.class_(
-    "ResetAccumulatorsAction", automation.Action
-)
+ResetValuesAction = ulp_ina219_sensor_ns.class_("ResetValuesAction", automation.Action)
 
 SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32C5]
 
@@ -338,7 +336,7 @@ SET_NET_ENERGY_ACTION_SCHEMA = cv.Schema(
     }
 )
 
-RESET_ACCUMULATORS_ACTION_SCHEMA = cv.maybe_simple_value(
+RESET_VALUES_ACTION_SCHEMA = cv.maybe_simple_value(
     {
         cv.GenerateID(): cv.use_id(UlpIna219SensorComponent),
         cv.Required(CONF_BUS): cv.All(
@@ -372,11 +370,11 @@ async def set_net_energy_action_to_code(config, action_id, template_arg, args):
 
 
 @automation.register_action(
-    "ulp_ina219.reset_accumulators",
-    ResetAccumulatorsAction,
-    RESET_ACCUMULATORS_ACTION_SCHEMA,
+    "ulp_ina219.reset_values",
+    ResetValuesAction,
+    RESET_VALUES_ACTION_SCHEMA,
 )
-async def set_reset_accumulators_action_to_code(config, action_id, template_arg, args):
+async def set_reset_values_action_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
     cg.add(var.set_bus_idx(config[CONF_BUS]))
