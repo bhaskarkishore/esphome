@@ -17,8 +17,8 @@
 namespace esphome {
 namespace ulp_ina219 {
 
-// The following is defined by the esp idf sdk as part of the ulp build process
-// and cannot be altered to satisfy the linter.
+// The following references are defined by the esp idf sdk as part of
+// the ulp build process and cannot be altered to satisfy the linter.
 // NOLINTBEGIN(readability-identifier-naming)
 extern const uint8_t lp_core_main_bin_start[] asm("_binary_ulp_main_bin_start");
 extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
@@ -28,11 +28,17 @@ static const char *const TAG = "ulp_219";
 
 ulp_ina219_context_t *UlpIna219::get_ulp_context() { return reinterpret_cast<ulp_ina219_context_t *>(&ulp_ctx); }
 
+void UlpIna219::on_powerdown() {
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
+  ctx->main_cpu_awake = 0;
+}
+
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup");
 
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
+  ctx->main_cpu_awake = 1;
 
   if (ctx->prg_state == PRG_STATE_NONE || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
     ulp_lp_core_stop();

@@ -15,6 +15,7 @@ class UlpIna219 : public PollingComponent {
   void setup() override;
   void update() override;
   void dump_config() override;
+  void on_powerdown() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
 
   void set_voltage_sensor(uint8_t bus_idx, sensor::Sensor *voltage_sensor) {

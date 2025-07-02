@@ -18,7 +18,7 @@ static const uint32_t SAMPLING_DELAY_WAIT = 75 * 1000;
 // The ulp code is compiled using a C compiler where modern
 // language features may not be supported.
 // NOLINTBEGIN(modernize-use-using)
-typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUNNING, PRG_STATE_SLEEPING } program_state_enum_t;
+typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUNNING, PRG_STATE_WAIT_SLEEP } program_state_enum_t;
 
 typedef enum {
   TRIG_MODE_NONE = 0,
@@ -99,6 +99,8 @@ typedef volatile struct {
   uint64_t run_duration;
   uint32_t slow_clk_period;
   program_state_enum_t prg_state;
+  bool main_cpu_awake;
+  bool aggressive_sleep;
 } ulp_ina219_context_t;
 
 // NOLINTEND(modernize-use-using)

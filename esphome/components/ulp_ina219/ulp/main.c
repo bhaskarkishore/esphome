@@ -1,6 +1,7 @@
 #include "ulp_lp_core_gpio.h"
 #include "soc/lp_timer_reg.h"
 #include "ulp_lp_core_utils.h"
+#include "ulp_lp_core_lp_timer_shared.h"
 #include "soc/rtc.h"
 #include "ina219.h"
 #include "types.h"
@@ -83,12 +84,6 @@ static void accumulate(volatile const bus_config_t *c, volatile bus_values_t *v,
 }
 
 static void process() {
-  // The adc is set to 128 samples which takes around 68 ms
-  // to finish according as per the datasheet. We wait a few
-  // ms more.
-  // TODO: Put the ulp to sleep while we are waiting.
-  ulp_lp_core_delay_us(SAMPLING_DELAY_WAIT);
-
   float previous_current = 0.f, previous_power = 0.f;
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile bus_values_t *v = &ctx.buses[i].values;
@@ -157,28 +152,43 @@ static void init() {
   }
 }
 
-int main(void) {
-  ctx.prg_state = PRG_STATE_RUNNING;
-  uint64_t current = lp_core_get_rtc_ticks();
-  bool led_active = ctx.led.interval > 0 && ctx.led.pin > -1;
+uint64_t current = 0;
 
-  if (led_active) {
-    if (ctx.led.counter >= ctx.led.interval) {
-      ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
-      ctx.led.counter = 0;
+int main(void) {
+  bool led_active = ctx.led.interval > 0 && ctx.led.pin > -1;
+  if (!ctx.aggressive_sleep || ctx.prg_state != PRG_STATE_WAIT_SLEEP) {
+    current = lp_core_get_rtc_ticks();
+    if (led_active) {
+      if (ctx.led.counter >= ctx.led.interval) {
+        ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
+        ctx.led.counter = 0;
+      }
+    }
+    init();
+    ctx.prg_state = PRG_STATE_RUNNING;
+    // The adc is set to 128 samples per value which takes around 68 ms
+    // to finish according as per the datasheet. We wait a few ms more.
+    if (ctx.aggressive_sleep) {
+      ctx.prg_state == PRG_STATE_WAIT_SLEEP;
+      uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(SAMPLING_DELAY_WAIT);
+      ulp_lp_core_lp_timer_set_wakeup_ticks(ticks);
+      ulp_lp_core_halt();
+    } else {
+      ulp_lp_core_delay_us(SAMPLING_DELAY_WAIT);
     }
   }
 
-  init();
   process();
 
-  if (led_active) {
-    ctx.led.counter++;
-    ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
-  }
+  if (ctx.prg_state == PRG_STATE_RUNNING) {
+    if (led_active) {
+      ctx.led.counter++;
+      ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
+    }
 
-  ctx.run_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, ctx.slow_clk_period);
-  ctx.prg_state = PRG_STATE_SLEEPING;
+    ctx.run_duration =
+        lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, ctx.slow_clk_period) - SAMPLING_DELAY_WAIT;
+  }
 
   return 0;
 }
