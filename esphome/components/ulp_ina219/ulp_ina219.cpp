@@ -41,6 +41,7 @@ void UlpIna219::setup() {
   ctx->main_cpu_awake = 1;
 
   if (ctx->prg_state == PRG_STATE_NONE || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    ctx->aggressive_sleep = true;
     ulp_lp_core_stop();
 
     esp_err_t ret = this->lp_i2c_init_();
@@ -277,11 +278,12 @@ void UlpIna219::update() {
   }
 
   ESP_LOGD(TAG,
-           "ulp debug:"
+           "ulp debug:\n"
            "  run dur: %.3f\n"
            "  slow clk: %u\n"
-           "  state: %u\n",
-           "  led cntr: %u", ctx->run_duration / 1000.f, ctx->slow_clk_period, ctx->prg_state, ctx->led.counter);
+           "  state: %u\n"
+           "  led cntr: %u",
+           (float) ctx->run_duration / 1000.f, ctx->slow_clk_period, ctx->prg_state, ctx->led.counter);
 }
 
 void UlpIna219::dump_config() {
