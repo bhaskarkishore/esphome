@@ -100,7 +100,6 @@ typedef volatile struct {
   uint32_t slow_clk_period;
   program_state_enum_t prg_state;
   bool main_cpu_awake;
-  bool aggressive_sleep;
 } ulp_ina219_context_t;
 
 // NOLINTEND(modernize-use-using)

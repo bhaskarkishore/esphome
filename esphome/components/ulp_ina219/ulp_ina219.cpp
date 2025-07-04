@@ -41,7 +41,6 @@ void UlpIna219::setup() {
   ctx->main_cpu_awake = 1;
 
   if (ctx->prg_state == PRG_STATE_NONE || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
-    ctx->aggressive_sleep = true;
     ulp_lp_core_stop();
 
     esp_err_t ret = this->lp_i2c_init_();

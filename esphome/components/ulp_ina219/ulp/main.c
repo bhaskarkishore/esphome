@@ -108,14 +108,16 @@ static void process() {
       // Accumulate current and energy
       accumulate(c, v, previous_current, previous_power, ctx.slow_clk_period);
 
-      for (uint8_t j = 0; j < MAX_TRIGGERS; ++j) {
-        if (t[j].status == TRIG_SET) {
-          switch (t[j].mode) {
-            case TRIG_MODE_VOLTAGE:
-              ulp_lp_core_wakeup_main_processor();
-              break;
-            case TRIG_MODE_NONE:
-            default:
+      if (!ctx.main_cpu_awake) {
+        for (uint8_t j = 0; j < MAX_TRIGGERS; ++j) {
+          if (t[j].status == TRIG_SET) {
+            switch (t[j].mode) {
+              case TRIG_MODE_VOLTAGE:
+                ulp_lp_core_wakeup_main_processor();
+                break;
+              case TRIG_MODE_NONE:
+              default:
+            }
           }
         }
       }
@@ -156,31 +158,31 @@ uint64_t current = 0;
 
 int main(void) {
   bool led_active = ctx.led.interval > 0 && ctx.led.pin > -1;
-  if (!ctx.aggressive_sleep || ctx.prg_state != PRG_STATE_WAIT_SLEEP) {
+
+  // Skip init if the previous run cycle initiated a wait sleep.
+  if (ctx.prg_state != PRG_STATE_WAIT_SLEEP) {
     current = lp_core_get_rtc_ticks();
-    if (led_active) {
-      if (ctx.led.counter >= ctx.led.interval) {
-        ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
-        ctx.led.counter = 0;
-      }
+
+    if (led_active && ctx.led.counter >= ctx.led.interval) {
+      ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
+      ctx.led.counter = 0;
     }
+
+    // Initialize the devices
     init();
-    ctx.prg_state = PRG_STATE_RUNNING;
+
     // The adc is set to 128 samples per value which takes around 68 ms
-    // to finish according as per the datasheet. We wait a few ms more.
-    if (ctx.aggressive_sleep) {
-      ctx.prg_state == PRG_STATE_WAIT_SLEEP;
-      uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(SAMPLING_DELAY_WAIT);
-      ulp_lp_core_lp_timer_set_wakeup_ticks(ticks);
-      ulp_lp_core_halt();
-    } else {
-      ulp_lp_core_delay_us(SAMPLING_DELAY_WAIT);
-    }
-  }
+    // to finish according as per the datasheet, we wait a little extra.
+    // To save power, we put the ulp processor to sleep while we wait.
+    ctx.prg_state = PRG_STATE_WAIT_SLEEP;
+    uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(SAMPLING_DELAY_WAIT);
+    ulp_lp_core_lp_timer_set_wakeup_ticks(ticks);
+    ulp_lp_core_halt();
+  } else {
+    ctx.prg_state = PRG_STATE_RUNNING;
+    // Read devices and update values
+    process();
 
-  process();
-
-  if (ctx.prg_state == PRG_STATE_RUNNING) {
     if (led_active) {
       ctx.led.counter++;
       ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
