@@ -53,7 +53,7 @@ typedef struct {
   uint8_t interval;
 } activity_led_t;
 
-typedef volatile struct {
+typedef volatile struct bus_config_struct {
   uint32_t calibration_register;
   float max_system_voltage;
   float max_system_current;

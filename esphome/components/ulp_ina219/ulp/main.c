@@ -4,11 +4,12 @@
 #include "ulp_lp_core_lp_timer_shared.h"
 #include "soc/rtc.h"
 #include "ina219.h"
-#include "types.h"
+#include "ulp_types.h"
 #include <math.h>
 #include "esp_err.h"
 
 ulp_ina219_context_t ctx = {0};
+uint64_t start_ticks = 0;
 
 static float clamp(float value, float threshold) { return fabs(value) <= threshold ? 0.f : value; }
 
@@ -154,14 +155,12 @@ static void init() {
   }
 }
 
-uint64_t current = 0;
-
 int main(void) {
   bool led_active = ctx.led.interval > 0 && ctx.led.pin > -1;
 
   // Skip init if the previous run cycle initiated a wait sleep.
   if (ctx.prg_state != PRG_STATE_WAIT_SLEEP) {
-    current = lp_core_get_rtc_ticks();
+    start_ticks = lp_core_get_rtc_ticks();
 
     if (led_active && ctx.led.counter >= ctx.led.interval) {
       ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
@@ -177,20 +176,20 @@ int main(void) {
     ctx.prg_state = PRG_STATE_WAIT_SLEEP;
     uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(SAMPLING_DELAY_WAIT);
     ulp_lp_core_lp_timer_set_wakeup_ticks(ticks);
-    ulp_lp_core_halt();
-  } else {
-    ctx.prg_state = PRG_STATE_RUNNING;
-    // Read devices and update values
-    process();
-
-    if (led_active) {
-      ctx.led.counter++;
-      ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
-    }
-
-    ctx.run_duration =
-        lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - current, ctx.slow_clk_period) - SAMPLING_DELAY_WAIT;
+    ulp_lp_core_halt();  // Execution stops here
   }
+
+  ctx.prg_state = PRG_STATE_RUNNING;
+  // Read devices and update values
+  process();
+
+  if (led_active) {
+    ctx.led.counter++;
+    ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
+  }
+
+  ctx.run_duration =
+      lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - start_ticks, ctx.slow_clk_period) - SAMPLING_DELAY_WAIT;
 
   return 0;
 }
