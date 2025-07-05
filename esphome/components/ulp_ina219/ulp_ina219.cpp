@@ -53,7 +53,7 @@ bool UlpIna219::is_valid_bus(uint8_t bus_idx) {
 
 void UlpIna219::on_powerdown() {
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
-  ctx->main_cpu_awake = 0;
+  ctx->main_cpu_awake = false;
 }
 
 void UlpIna219::setup() {
@@ -61,7 +61,7 @@ void UlpIna219::setup() {
 
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
-  ctx->main_cpu_awake = 1;
+  ctx->main_cpu_awake = true;
 
   if (ctx->prg_state == PRG_STATE_NONE || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
     ulp_lp_core_stop();

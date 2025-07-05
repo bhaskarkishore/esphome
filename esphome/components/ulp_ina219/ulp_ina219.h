@@ -191,7 +191,7 @@ class UlpIna219 : public PollingComponent {
   uint8_t led_interval_ = 0;
   uint32_t sleep_duration_ = 0;
   bool bus_enabled_[MAX_BUS] = {false, false};
-  bus_config_struct bus_config_[MAX_BUS] = {0};
+  BusConfigStruct bus_config_[MAX_BUS] = {};
 
   static ulp_ina219_context_t *get_ulp_context();
   static bool wait_for_ulp_sleep();
