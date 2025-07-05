@@ -18,7 +18,7 @@ static const uint32_t SAMPLING_DELAY_WAIT = 75 * 1000;
 // The ulp code is compiled using a C compiler where modern
 // language features may not be supported.
 // NOLINTBEGIN(modernize-use-using)
-typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUN, PRG_STATE_SLEEP, PRG_STATE_WAIT_SLEEP } program_state_enum_t;
+typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUN, PRG_STATE_WAIT_SLEEP } program_state_enum_t;
 
 typedef enum {
   TRIG_MODE_NONE = 0,
@@ -53,8 +53,8 @@ typedef struct {
   uint8_t interval;
 } activity_led_t;
 
-typedef volatile struct bus_config_struct {
-  uint32_t calibration_register_override;
+typedef volatile struct {
+  uint32_t calibration_register;
   float max_system_voltage;
   float max_system_current;
   float shunt_resistance;

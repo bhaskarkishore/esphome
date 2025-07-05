@@ -10,7 +10,7 @@ static inline int32_t _ceilf(float x) { return (int32_t) (x + 0.999999f); }
 esp_err_t ina219_power_down(uint8_t address) { return i2c_write16(address, INA219_REGISTER_CONFIG, 0x0); }
 
 esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float max_current,
-                      uint32_t cfg_calibration_register, uint32_t *calibration_register, uint32_t *current_lsb) {
+                      uint32_t calibration_register_override, uint32_t *calibration_register, uint32_t *current_lsb) {
   // Reset device
   esp_err_t ret = i2c_write16(address, INA219_REGISTER_CONFIG, 0x8000);
 
@@ -35,9 +35,8 @@ esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float m
     config |= 0b0000000000000000;
   }
 
-  // 40mv gain
   float max_shunt_voltage = max_current * 1000.f * r_shunt;
-  uint16_t pga_gain = 0b00;
+  uint16_t pga_gain = 0b00;  // 40mv gain
 
   if (max_shunt_voltage < 40.f) {
     pga_gain = 0b00;  // 40mV
@@ -57,8 +56,8 @@ esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float m
   }
 
   *current_lsb = (uint32_t) _ceilf(max_current * 1000000.0f / 0x8000);
-  if (cfg_calibration_register != 0) {
-    *calibration_register = cfg_calibration_register;
+  if (calibration_register_override != 0) {
+    *calibration_register = calibration_register_override;
   } else {
     *calibration_register = (uint16_t) (0.04096f / (0.000001 * (*current_lsb) * r_shunt));
   }

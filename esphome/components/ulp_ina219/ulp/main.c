@@ -144,7 +144,7 @@ static void init() {
     v->error_code = ESP_OK;
     if (c->address > 0) {
       ret = ina219_init(c->address, c->max_system_voltage, c->shunt_resistance, c->max_system_current,
-                        c->calibration_register, &calibration_register, &current_lsb);
+                        c->calibration_register_override, &calibration_register, &current_lsb);
       if (ret == ESP_OK) {
         v->current_lsb = current_lsb;
         v->calibration_register = calibration_register;
@@ -161,6 +161,7 @@ int main(void) {
   // Skip init if the previous run cycle initiated a wait sleep.
   if (ctx.prg_state != PRG_STATE_WAIT_SLEEP) {
     start_ticks = lp_core_get_rtc_ticks();
+    ctx.prg_state = PRG_STATE_RUN;
 
     if (led_active && ctx.led.counter >= ctx.led.interval) {
       ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
@@ -179,7 +180,7 @@ int main(void) {
     ulp_lp_core_halt();  // Execution stops here
   }
 
-  ctx.prg_state = PRG_STATE_RUNNING;
+  ctx.prg_state = PRG_STATE_RUN;
   // Read devices and update values
   process();
 
@@ -191,5 +192,6 @@ int main(void) {
   ctx.run_duration =
       lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - start_ticks, ctx.slow_clk_period) - SAMPLING_DELAY_WAIT;
 
+  ctx.prg_state = PRG_STATE_SLEEP;
   return 0;
 }

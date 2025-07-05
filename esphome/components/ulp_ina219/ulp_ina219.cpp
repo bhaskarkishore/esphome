@@ -17,6 +17,9 @@
 namespace esphome {
 namespace ulp_ina219 {
 
+static const char *const TAG = "ulp_219";
+static const uint32_t ULP_INA219_WAIT_TIMEOUT = 10;
+
 // The following references are defined by the esp idf sdk as part of
 // the ulp build process and cannot be altered to satisfy the linter.
 // NOLINTBEGIN(readability-identifier-naming)
@@ -25,6 +28,28 @@ extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
 // NOLINTEND(readability-identifier-naming)
 
 ulp_ina219_context_t *UlpIna219::get_ulp_context() { return reinterpret_cast<ulp_ina219_context_t *>(&ulp_ctx); }
+
+bool UlpIna219::wait_for_ulp_sleep() {
+  ulp_ina219_context_t *ctx = get_ulp_context();
+  uint32_t start_time = millis();
+  while (ctx->prg_state != PRG_STATE_SLEEP && ctx->prg_state != PRG_STATE_WAIT_SLEEP) {
+    if (millis() - start_time > ULP_INA219_WAIT_TIMEOUT) {
+      ESP_LOGE(TAG, "timeout wait ulp sleep");
+      return false;
+    }
+    yield();
+  }
+  return true;
+}
+
+bool UlpIna219::is_valid_bus(uint8_t bus_idx) {
+  if (bus_idx < MAX_BUS) {
+    return true;
+  } else {
+    ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
+    return false;
+  }
+}
 
 void UlpIna219::on_powerdown() {
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
@@ -93,9 +118,8 @@ esp_err_t UlpIna219::lp_core_init_() {
       c->shunt_resistance = this->bus_config_[i].shunt_resistance;
       c->current_accum_threshold = this->bus_config_[i].current_accum_threshold;
       c->power_accum_threshold = this->bus_config_[i].power_accum_threshold;
-      c->calibration_register = this->bus_config_[i].calibration_register;
+      c->calibration_register_override = this->bus_config_[i].calibration_register_override;
       c->reset = 1;
-
     } else {
       c->address = 0x0;
       ESP_LOGD(TAG, "Bus %c disabled", 'A' + i);
@@ -159,8 +183,22 @@ void UlpIna219::reset_values(uint8_t bus_idx) {
   if (bus_idx < MAX_BUS) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile bus_config_t *c = &ctx->buses[bus_idx].config;
-    c->reset = 1;
-    this->update();
+    volatile bus_values_t *v = &ctx->buses[bus_idx].values;
+    if (wait_for_ulp_sleep()) {
+      v->charge_in = 0;
+      v->charge_out = 0;
+      v->charge_net = 0;
+      v->energy_in = 0;
+      v->energy_out = 0;
+      v->energy_net = 0;
+      v->voltage_min = v->voltage;
+      v->voltage_max = v->voltage;
+      v->current_min = v->current;
+      v->current_max = v->current;
+      this->update();
+    } else {
+      ESP_LOGE(TAG, "reset values failed");
+    }
   } else {
     ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
   }
@@ -169,10 +207,14 @@ void UlpIna219::reset_values(uint8_t bus_idx) {
 void UlpIna219::set_net_charge(uint8_t bus_idx, double charge) {
   if (bus_idx < MAX_BUS) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
-    volatile bus_values_t *b = &ctx->buses[bus_idx].values;
-    b->charge_net = charge;
-    if (this->charge_net_sensor_[bus_idx] != nullptr) {
-      this->charge_net_sensor_[bus_idx]->publish_state(b->charge_net);
+    volatile bus_values_t *v = &ctx->buses[bus_idx].values;
+    if (wait_for_ulp_sleep()) {
+      v->charge_net = charge;
+      if (this->charge_net_sensor_[bus_idx] != nullptr) {
+        this->charge_net_sensor_[bus_idx]->publish_state(v->charge_net);
+      }
+    } else {
+      ESP_LOGE(TAG, "net_charge not set");
     }
   } else {
     ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
@@ -182,10 +224,14 @@ void UlpIna219::set_net_charge(uint8_t bus_idx, double charge) {
 void UlpIna219::set_net_energy(uint8_t bus_idx, double energy) {
   if (bus_idx < MAX_BUS) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
-    volatile bus_values_t *b = &ctx->buses[bus_idx].values;
-    b->energy_net = energy;
-    if (this->energy_net_sensor_[bus_idx] != nullptr) {
-      this->energy_net_sensor_[bus_idx]->publish_state(b->energy_net);
+    volatile bus_values_t *v = &ctx->buses[bus_idx].values;
+    if (wait_for_ulp_sleep()) {
+      v->energy_net = energy;
+      if (this->energy_net_sensor_[bus_idx] != nullptr) {
+        this->energy_net_sensor_[bus_idx]->publish_state(v->energy_net);
+      }
+    } else {
+      ESP_LOGE(TAG, "net_energy not set");
     }
   } else {
     ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
@@ -282,7 +328,7 @@ void UlpIna219::update() {
 
   ESP_LOGD(TAG,
            "ulp debug:\n"
-           "  run dur: %.3f\n"
+           "  run dur: %.3f ms\n"
            "  slow clk: %u\n"
            "  state: %u\n"
            "  led cntr: %u",
@@ -310,15 +356,15 @@ void UlpIna219::dump_config() {
     if (this->bus_enabled_[i]) {
       ESP_LOGCONFIG(TAG,
                     "Bus %c:\n"
-                    "  Address: %X\n"
+                    "  Address: 0x%X\n"
                     "  Shunt Resistance: %f\n"
                     "  Max Voltage: %f\n"
                     "  Max Current: %f\n"
                     "  Current Accumulation Threshold: %f\n"
                     "  Power Accumulation Threshold: %f\n"
-                    "  Calibration Register: %f",
+                    "  Calibration Register: %u",
                     'A' + i, c->address, c->shunt_resistance, c->max_system_voltage, c->max_system_current,
-                    c->current_accum_threshold, c->power_accum_threshold, c->calibration_register);
+                    c->current_accum_threshold, c->power_accum_threshold, c->calibration_register_override);
       LOG_SENSOR("  ", "Voltage", this->voltage_sensor_[i]);
       LOG_SENSOR("  ", "Current", this->current_sensor_[i]);
       LOG_SENSOR("  ", "Power", this->power_sensor_[i]);
