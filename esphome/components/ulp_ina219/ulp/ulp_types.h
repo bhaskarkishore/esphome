@@ -34,7 +34,7 @@ typedef enum {
   TRIG_MODE_ENERGY_DELTA
 } wake_trigger_mode_enum_t;
 
-typedef enum { TRIG_NOT_SET = 0, TRIG_SET, TRIG_FIRED } wake_trigger_state_enum_t;
+typedef enum { TRIG_NOT_SET = 0, TRIG_SET, TRIG_FIRED } wake_trigger_status_enum_t;
 
 typedef union {
   struct {
@@ -49,8 +49,10 @@ typedef union {
 
 typedef struct {
   wake_trigger_mode_enum_t mode;
-  wake_trigger_state_enum_t status;
+  wake_trigger_status_enum_t status;
   wake_trigger_conditions_t condition;
+  uint32_t last_fired_us;
+  uint32_t debounce_us;
 } wake_trigger_t;
 
 typedef struct {

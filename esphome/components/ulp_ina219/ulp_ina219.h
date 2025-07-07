@@ -155,6 +155,9 @@ class UlpIna219 : public PollingComponent {
     }
   }
 
+  void set_trigger(uint8_t bus_idx, uint8_t trg_idx, wake_trigger_mode_enum_t mode, uint32_t debounce_ms, float above,
+                   float below, float threshold);
+
   void set_led_pin(InternalGPIOPin *led_pin) { led_pin_ = gpio_num_t(led_pin->get_pin()); }
 
   void set_led_interval(uint8_t interval) { led_interval_ = interval; }

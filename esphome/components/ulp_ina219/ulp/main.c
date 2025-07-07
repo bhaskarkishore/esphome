@@ -39,10 +39,10 @@ static uint64_t lp_core_rtc_ticks_to_us(uint64_t ticks, uint64_t period) {
 }
 
 static void accumulate(volatile const bus_config_t *c, volatile bus_values_t *v, float previous_current,
-                       float previous_power, uint32_t slow_clk_period) {
+                       float previous_power) {
   float current = clamp(v->current, c->current_accum_threshold);
   float power = clamp(v->power, c->power_accum_threshold);
-  uint64_t current_time = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), slow_clk_period);
+  uint64_t current_time = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), ctx.slow_clk_period);
   float time_delta_hours = (current_time - v->last_sample_time) / 3600000000.0f;
 
   float charge = 0.f, charge_in = 0.f, charge_out = 0.f, energy = 0.f, energy_in = 0.f, energy_out = 0.f;
@@ -139,10 +139,14 @@ static void check_triggers(uint8_t bus_idx) {
           break;
       }
 
-      if (triggered) {
-        t[i].status = TRIG_FIRED;
-        ulp_lp_core_wakeup_main_processor();
-        break;
+      if (triggered && !ctx.main_cpu_awake) {
+        uint64_t current_time_us = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), ctx.slow_clk_period);
+        if ((current_time_us - t[i].last_fired_us) > t[i].debounce_us) {
+          t[i].status = TRIG_FIRED;
+          t[i].last_fired_us = current_time_us;
+          ulp_lp_core_wakeup_main_processor();
+          break;
+        }
       }
     }
   }
@@ -170,7 +174,7 @@ static void update() {
       min_max(v->voltage, &v->voltage_min, &v->voltage_max, c->reset);
 
       // Accumulate current and energy
-      accumulate(c, v, previous_current, previous_power, ctx.slow_clk_period);
+      accumulate(c, v, previous_current, previous_power);
 
       // Clear reset if set
       c->reset = false;
@@ -179,7 +183,7 @@ static void update() {
       ina219_power_down(c->address);
 
       // Check triggers
-      if (!ctx.main_cpu_awake && ctx.triggers_enabled) {
+      if (ctx.triggers_enabled) {
         check_triggers(i);
       }
     }

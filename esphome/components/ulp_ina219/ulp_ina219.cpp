@@ -42,15 +42,6 @@ bool UlpIna219::wait_for_ulp_sleep() {
   return true;
 }
 
-bool UlpIna219::is_valid_bus(uint8_t bus_idx) {
-  if (bus_idx < MAX_BUS) {
-    return true;
-  } else {
-    ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
-    return false;
-  }
-}
-
 void UlpIna219::on_powerdown() {
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
   ctx->main_cpu_awake = false;
@@ -195,12 +186,36 @@ void UlpIna219::reset_triggers(uint8_t bus_idx) {
     volatile wake_trigger_t *t = ctx->buses[bus_idx].triggers;
 
     for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
-      if (t[i].status == TRIG_FIRED) {
+      if (t[i].status != TRIG_NOT_SET) {
         t[i].status = TRIG_SET;
         if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
           t[i].condition.delta.baseline = INFINITY;
         }
       }
+    }
+  }
+}
+
+void UlpIna219::set_trigger(uint8_t bus_idx, uint8_t trg_idx, wake_trigger_mode_enum_t mode, uint32_t debounce_ms,
+                            float above, float below, float threshold) {
+  if (is_valid_bus(bus_idx)) {
+    if (trg_idx < MAX_TRIGGERS) {
+      volatile ulp_ina219_context_t *ctx = get_ulp_context();
+      volatile wake_trigger_t *t = ctx->buses[bus_idx].triggers;
+
+      ctx->triggers_enabled = true;
+      t[trg_idx].status = TRIG_SET;
+      t[trg_idx].mode = mode;
+      t[trg_idx].debounce_us = debounce_ms * 1000;
+      if (mode == TRIG_MODE_CHARGE_DELTA || mode == TRIG_MODE_ENERGY_DELTA) {
+        t[trg_idx].condition.delta.threshold = threshold;
+        t[trg_idx].condition.delta.baseline = INFINITY;
+      } else {
+        t[trg_idx].condition.range.above = above;
+        t[trg_idx].condition.range.below = below;
+      }
+    } else {
+      ESP_LOGE(TAG, "Invalid trigger idx %u", trg_idx);
     }
   }
 }
@@ -259,6 +274,15 @@ void UlpIna219::set_net_energy(uint8_t bus_idx, float energy) {
     }
   } else {
     ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
+  }
+}
+
+bool UlpIna219::is_valid_bus(uint8_t bus_idx) {
+  if (bus_idx < MAX_BUS) {
+    return true;
+  } else {
+    ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
+    return false;
   }
 }
 

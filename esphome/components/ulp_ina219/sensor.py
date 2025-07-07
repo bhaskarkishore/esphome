@@ -15,6 +15,7 @@ from esphome.const import (
     CONF_ADDRESS,
     CONF_BELOW,
     CONF_CURRENT,
+    CONF_DEBOUNCE,
     CONF_ID,
     CONF_INTERVAL,
     CONF_MAX_CURRENT,
@@ -274,6 +275,9 @@ TRIGGER_SCHEMA = cv.All(
         cv.Optional(CONF_ABOVE): cv.float_,
         cv.Optional(CONF_BELOW): cv.float_,
         cv.Optional(CONF_THRESHOLD): cv.positive_float,
+        cv.Optional(
+            CONF_DEBOUNCE, default="10000ms"
+        ): cv.positive_time_period_milliseconds,
     },
     validate_trigger,
 )
@@ -514,7 +518,7 @@ async def to_code(config):
 
     esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_ENABLED", True)
     esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_TYPE_LP_CORE", True)
-    esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_RESERVE_MEM", 13824)
+    esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_RESERVE_MEM", 14100)
 
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
@@ -552,7 +556,22 @@ async def to_code(config):
                     cg.add(getattr(var, fn)(bus_idx, s))
 
             if CONF_TRIGGERS in bus_config:
-                trigger_configs = bus_config[CONF_TRIGGERS]
                 cg.add(var.enable_ulp_wake_src())
-                for tc in trigger_configs:
-                    print(f"{tc}")
+                for trg_idx, trigger in enumerate(bus_config[CONF_TRIGGERS]):
+                    mode = TRIGGER_MODES[trigger[CONF_MODE]]
+                    above = trigger.get(CONF_ABOVE, cg.RawExpression("INFINITY"))
+                    below = trigger.get(CONF_BELOW, cg.RawExpression("-INFINITY"))
+                    threshold = trigger.get(
+                        CONF_THRESHOLD, cg.RawExpression("INFINITY")
+                    )
+                    cg.add(
+                        var.set_trigger(
+                            bus_idx,
+                            trg_idx,
+                            getattr(ulp_ina219_sensor_ns, mode),
+                            trigger[CONF_DEBOUNCE],
+                            above,
+                            below,
+                            threshold,
+                        )
+                    )
