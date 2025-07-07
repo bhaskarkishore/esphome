@@ -11,17 +11,21 @@ from esphome.components.esp32 import (
 )
 import esphome.config_validation as cv
 from esphome.const import (
+    CONF_ABOVE,
     CONF_ADDRESS,
+    CONF_BELOW,
     CONF_CURRENT,
     CONF_ID,
     CONF_INTERVAL,
     CONF_MAX_CURRENT,
     CONF_MAX_VOLTAGE,
+    CONF_MODE,
     CONF_PIN,
     CONF_POWER,
     CONF_SHUNT_RESISTANCE,
     CONF_SHUNT_VOLTAGE,
     CONF_SLEEP_DURATION,
+    CONF_THRESHOLD,
     CONF_VALUE,
     CONF_VOLTAGE,
     DEVICE_CLASS_CURRENT,
@@ -42,12 +46,14 @@ from .const import (
     CONF_BUS_A,
     CONF_BUS_B,
     CONF_CALIBRATION_REGISTER_OVERRIDE,
+    CONF_CHARGE_DELTA,
     CONF_CHARGE_IN,
     CONF_CHARGE_NET,
     CONF_CHARGE_OUT,
     CONF_CURRENT_ACCUM_THRESHOLD,
     CONF_CURRENT_MAX,
     CONF_CURRENT_MIN,
+    CONF_ENERGY_DELTA,
     CONF_ENERGY_IN,
     CONF_ENERGY_NET,
     CONF_ENERGY_OUT,
@@ -59,6 +65,7 @@ from .const import (
     CONF_POWER_ACCUM_THRESHOLD,
     CONF_POWER_MAX,
     CONF_POWER_MIN,
+    CONF_TRIGGERS,
     CONF_VOLTAGE_MAX,
     CONF_VOLTAGE_MIN,
     UNIT_AMPS_HOURS,
@@ -83,6 +90,10 @@ SetNetEnergyAction = ulp_ina219_sensor_ns.class_(
 )
 
 ResetValuesAction = ulp_ina219_sensor_ns.class_("ResetValuesAction", automation.Action)
+
+ResetTriggersAction = ulp_ina219_sensor_ns.class_(
+    "ResetTriggersAction", automation.Action
+)
 
 SUPPORTED_VARIANTS = [VARIANT_ESP32C6, VARIANT_ESP32C5]
 
@@ -221,6 +232,53 @@ SENSOR_SCHEMA = cv.Schema(
 )
 
 
+TRIGGER_MODES = {
+    CONF_VOLTAGE: "TRIG_MODE_VOLTAGE",
+    CONF_CURRENT: "TRIG_MODE_CURRENT",
+    CONF_CHARGE_NET: "TRIG_MODE_CHARGE_NET",
+    CONF_CHARGE_IN: "TRIG_MODE_CHARGE_IN",
+    CONF_CHARGE_OUT: "TRIG_MODE_CHARGE_OUT",
+    CONF_ENERGY_NET: "TRIG_MODE_ENERGY_NET",
+    CONF_ENERGY_IN: "TRIG_MODE_ENERGY_IN",
+    CONF_ENERGY_OUT: "TRIG_MODE_ENERGY_OUT",
+    CONF_CHARGE_DELTA: "TRIG_MODE_CHARGE_DELTA",
+    CONF_ENERGY_DELTA: "TRIG_MODE_ENERGY_DELTA",
+}
+
+DELTA_MODES = [CONF_CHARGE_DELTA, CONF_ENERGY_DELTA]
+
+RANGE_MODES = [key for key in TRIGGER_MODES.keys() if key not in DELTA_MODES]
+
+
+def validate_trigger(value):
+    mode = value["mode"]
+
+    if mode in RANGE_MODES:
+        if CONF_ABOVE not in value and CONF_BELOW not in value:
+            raise cv.Invalid(f"Mode '{mode}' requires 'above' and/or 'below'")
+        if CONF_THRESHOLD in value:
+            raise cv.Invalid(f"Mode '{mode}' cannot have 'threshold'")
+
+    elif mode in DELTA_MODES:
+        if CONF_THRESHOLD not in value:
+            raise cv.Invalid(f"Mode '{mode}' requires 'threshold'")
+        if CONF_ABOVE in value or CONF_BELOW in value:
+            raise cv.Invalid(f"Mode '{mode}' cannot have 'above' or 'below'")
+
+    return value
+
+
+TRIGGER_SCHEMA = cv.All(
+    {
+        cv.Required(CONF_MODE): cv.one_of(*TRIGGER_MODES.keys(), lower=True),
+        cv.Optional(CONF_ABOVE): cv.float_,
+        cv.Optional(CONF_BELOW): cv.float_,
+        cv.Optional(CONF_THRESHOLD): cv.positive_float,
+    },
+    validate_trigger,
+)
+
+
 def validate_lp_gpio_pin(value):
     value = pins.gpio_output_pin_schema(value)
     variant = get_esp32_variant()
@@ -247,6 +305,9 @@ BUS_SCHEMA_A = (
     cv.Schema(
         {
             cv.Optional(CONF_ADDRESS, default=0x40): cv.hex_uint8_t,
+            cv.Optional(CONF_TRIGGERS, default=[]): cv.All(
+                cv.ensure_list(TRIGGER_SCHEMA), cv.Length(max=3)
+            ),
         }
     )
     .extend(CONFIG_SCHEMA)
@@ -257,6 +318,9 @@ BUS_SCHEMA_B = (
     cv.Schema(
         {
             cv.Optional(CONF_ADDRESS, default=0x41): cv.hex_uint8_t,
+            cv.Optional(CONF_TRIGGERS, default=[]): cv.All(
+                cv.ensure_list(TRIGGER_SCHEMA), cv.Length(max=3)
+            ),
         }
     )
     .extend(CONFIG_SCHEMA)
@@ -346,6 +410,16 @@ RESET_VALUES_ACTION_SCHEMA = cv.maybe_simple_value(
     key=CONF_BUS,
 )
 
+RESET_TRIGGERS_ACTION_SCHEMA = cv.maybe_simple_value(
+    {
+        cv.GenerateID(): cv.use_id(UlpIna219SensorComponent),
+        cv.Required(CONF_BUS): cv.All(
+            cv.uint8_t, cv.Range(min=0, max=len(BUS_KEYS) - 1)
+        ),
+    },
+    key=CONF_BUS,
+)
+
 
 @automation.register_action(
     "ulp_ina219.set_net_charge", SetNetChargeAction, SET_NET_CHARGE_ACTION_SCHEMA
@@ -375,6 +449,18 @@ async def set_net_energy_action_to_code(config, action_id, template_arg, args):
     RESET_VALUES_ACTION_SCHEMA,
 )
 async def set_reset_values_action_to_code(config, action_id, template_arg, args):
+    var = cg.new_Pvariable(action_id, template_arg)
+    await cg.register_parented(var, config[CONF_ID])
+    cg.add(var.set_bus_idx(config[CONF_BUS]))
+    return var
+
+
+@automation.register_action(
+    "ulp_ina219.reset_values",
+    ResetTriggersAction,
+    RESET_VALUES_ACTION_SCHEMA,
+)
+async def set_reset_triggers_action_to_code(config, action_id, template_arg, args):
     var = cg.new_Pvariable(action_id, template_arg)
     await cg.register_parented(var, config[CONF_ID])
     cg.add(var.set_bus_idx(config[CONF_BUS]))
@@ -428,7 +514,7 @@ async def to_code(config):
 
     esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_ENABLED", True)
     esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_TYPE_LP_CORE", True)
-    esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_RESERVE_MEM", 14000)
+    esp32.add_idf_sdkconfig_option("CONFIG_ULP_COPROC_RESERVE_MEM", 13824)
 
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
@@ -455,7 +541,6 @@ async def to_code(config):
     for bus_idx, bus_key in enumerate(BUS_KEYS):
         if bus_key in config:
             bus_config = config[bus_key]
-            cg.add(var.set_bus_enabled(bus_idx))
 
             for key, fn in CONFIG_TYPES.items():
                 if key in bus_config:
@@ -465,3 +550,9 @@ async def to_code(config):
                 if key in bus_config:
                     s = await sensor.new_sensor(bus_config[key])
                     cg.add(getattr(var, fn)(bus_idx, s))
+
+            if CONF_TRIGGERS in bus_config:
+                trigger_configs = bus_config[CONF_TRIGGERS]
+                cg.add(var.enable_ulp_wake_src())
+                for tc in trigger_configs:
+                    print(f"{tc}")

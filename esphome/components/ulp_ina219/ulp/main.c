@@ -84,12 +84,75 @@ static void accumulate(volatile const bus_config_t *c, volatile bus_values_t *v,
   v->last_sample_time = current_time;
 }
 
-static void process() {
+static void check_triggers(uint8_t bus_idx) {
+  volatile wake_trigger_t *t = ctx.buses[bus_idx].triggers;
+  volatile bus_values_t *v = &ctx.buses[bus_idx].values;
+
+  for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
+    bool triggered = false;
+
+    if (t[i].status == TRIG_SET) {
+      volatile wake_trigger_conditions_t *cond = &t[i].condition;
+
+      switch (t[i].mode) {
+        case TRIG_MODE_VOLTAGE:
+          triggered = (v->voltage > cond->range.above || v->voltage < cond->range.below);
+          break;
+        case TRIG_MODE_CURRENT:
+          triggered = (v->current > cond->range.above || v->current < cond->range.below);
+          break;
+        case TRIG_MODE_CHARGE_NET:
+          triggered = (v->charge_net > cond->range.above || v->charge_net < cond->range.below);
+          break;
+        case TRIG_MODE_CHARGE_IN:
+          triggered = (v->charge_in > cond->range.above || v->charge_in < cond->range.below);
+          break;
+        case TRIG_MODE_CHARGE_OUT:
+          triggered = (v->charge_out > cond->range.above || v->charge_out < cond->range.below);
+          break;
+        case TRIG_MODE_ENERGY_NET:
+          triggered = (v->energy_net > cond->range.above || v->energy_net < cond->range.below);
+          break;
+        case TRIG_MODE_ENERGY_IN:
+          triggered = (v->energy_in > cond->range.above || v->energy_in < cond->range.below);
+          break;
+        case TRIG_MODE_ENERGY_OUT:
+          triggered = (v->energy_out > cond->range.above || v->energy_out < cond->range.below);
+          break;
+        case TRIG_MODE_CHARGE_DELTA:
+          if (cond->delta.baseline == INFINITY) {
+            cond->delta.baseline = v->charge_net;
+          } else {
+            triggered = (fabs(v->charge_net - cond->delta.baseline) > cond->delta.threshold);
+          }
+          break;
+        case TRIG_MODE_ENERGY_DELTA:
+          if (cond->delta.baseline == INFINITY) {
+            cond->delta.baseline = v->energy_net;
+          } else {
+            triggered = (fabs(v->energy_net - cond->delta.baseline) > cond->delta.threshold);
+          }
+          break;
+        case TRIG_MODE_NONE:
+          break;
+        default:
+          break;
+      }
+
+      if (triggered) {
+        t[i].status = TRIG_FIRED;
+        ulp_lp_core_wakeup_main_processor();
+        break;
+      }
+    }
+  }
+}
+
+static void update() {
   float previous_current = 0.f, previous_power = 0.f;
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile bus_values_t *v = &ctx.buses[i].values;
     volatile bus_config_t *c = &ctx.buses[i].config;
-    volatile wake_trigger_t *t = ctx.buses[i].triggers;
 
     if (c->address > 0 && v->error_code == ESP_OK) {
       previous_current = v->current;
@@ -109,25 +172,16 @@ static void process() {
       // Accumulate current and energy
       accumulate(c, v, previous_current, previous_power, ctx.slow_clk_period);
 
-      if (!ctx.main_cpu_awake) {
-        for (uint8_t j = 0; j < MAX_TRIGGERS; ++j) {
-          if (t[j].status == TRIG_SET) {
-            switch (t[j].mode) {
-              case TRIG_MODE_VOLTAGE:
-                ulp_lp_core_wakeup_main_processor();
-                break;
-              case TRIG_MODE_NONE:
-              default:
-            }
-          }
-        }
-      }
-
       // Clear reset if set
-      c->reset = 0;
+      c->reset = false;
 
       // Power down
       ina219_power_down(c->address);
+
+      // Check triggers
+      if (!ctx.main_cpu_awake && ctx.triggers_enabled) {
+        check_triggers(i);
+      }
     }
   }
 }
@@ -175,14 +229,14 @@ int main(void) {
     // to finish according as per the datasheet, we wait a little extra.
     // To save power, we put the ulp processor to sleep while we wait.
     ctx.prg_state = PRG_STATE_WAIT_SLEEP;
-    uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(SAMPLING_DELAY_WAIT);
+    uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(SAMPLING_DELAY_WAIT_US);
     ulp_lp_core_lp_timer_set_wakeup_ticks(ticks);
     ulp_lp_core_halt();  // Execution stops here
   }
 
   ctx.prg_state = PRG_STATE_RUN;
   // Read devices and update values
-  process();
+  update();
 
   if (led_active) {
     ctx.led.counter++;
@@ -190,7 +244,7 @@ int main(void) {
   }
 
   ctx.run_duration =
-      lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - start_ticks, ctx.slow_clk_period) - SAMPLING_DELAY_WAIT;
+      lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - start_ticks, ctx.slow_clk_period) - SAMPLING_DELAY_WAIT_US;
 
   ctx.prg_state = PRG_STATE_SLEEP;
   return 0;

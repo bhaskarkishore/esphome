@@ -155,23 +155,21 @@ class UlpIna219 : public PollingComponent {
     }
   }
 
-  void set_bus_enabled(uint8_t bus_idx) {
-    if (is_valid_bus(bus_idx)) {
-      bus_enabled_[bus_idx] = true;
-    }
-  }
-
   void set_led_pin(InternalGPIOPin *led_pin) { led_pin_ = gpio_num_t(led_pin->get_pin()); }
 
   void set_led_interval(uint8_t interval) { led_interval_ = interval; }
 
   void set_sleep_duration(uint32_t sleep_duration) { sleep_duration_ = sleep_duration; }
 
-  void set_net_charge(uint8_t bus_idx, double charge);
+  void set_net_charge(uint8_t bus_idx, float charge);
 
-  void set_net_energy(uint8_t bus_idx, double energy);
+  void set_net_energy(uint8_t bus_idx, float energy);
 
   void reset_values(uint8_t bus_idx);
+
+  void reset_triggers(uint8_t bus_idx);
+
+  void enable_ulp_wake_src();
 
   void set_lp_sda_pin(InternalGPIOPin *lp_sda_pin) { lp_sda_pin_ = gpio_num_t(lp_sda_pin->get_pin()); }
 
@@ -190,7 +188,6 @@ class UlpIna219 : public PollingComponent {
   gpio_num_t led_pin_ = GPIO_NUM_NC;
   uint8_t led_interval_ = 0;
   uint32_t sleep_duration_ = 0;
-  bool bus_enabled_[MAX_BUS] = {false, false};
   BusConfigStruct bus_config_[MAX_BUS] = {};
 
   static ulp_ina219_context_t *get_ulp_context();
@@ -240,6 +237,13 @@ template<typename... Ts> class ResetValuesAction : public Action<Ts...>, public 
   TEMPLATABLE_VALUE(uint8_t, bus_idx)
 
   void play(Ts... x) override { this->parent_->reset_values(this->bus_idx_.value(x...)); }
+};
+
+template<typename... Ts> class ResetTriggersAction : public Action<Ts...>, public Parented<UlpIna219> {
+ public:
+  TEMPLATABLE_VALUE(uint8_t, bus_idx)
+
+  void play(Ts... x) override { this->parent_->reset_triggers(this->bus_idx_.value(x...)); }
 };
 
 }  // namespace ulp_ina219

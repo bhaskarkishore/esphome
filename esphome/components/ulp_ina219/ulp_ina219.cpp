@@ -110,7 +110,7 @@ esp_err_t UlpIna219::lp_core_init_() {
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile bus_config_t *c = &ctx->buses[i].config;
 
-    if (this->bus_enabled_[i]) {
+    if (this->bus_config_[i].address > 0) {
       ESP_LOGD(TAG, "Bus %c enabled", i == 0 ? 'A' : 'B');
       c->max_system_voltage = this->bus_config_[i].max_system_voltage;
       c->max_system_current = this->bus_config_[i].max_system_current;
@@ -119,7 +119,7 @@ esp_err_t UlpIna219::lp_core_init_() {
       c->current_accum_threshold = this->bus_config_[i].current_accum_threshold;
       c->power_accum_threshold = this->bus_config_[i].power_accum_threshold;
       c->calibration_register_override = this->bus_config_[i].calibration_register_override;
-      c->reset = 1;
+      c->reset = true;
     } else {
       c->address = 0x0;
       ESP_LOGD(TAG, "Bus %c disabled", 'A' + i);
@@ -179,8 +179,34 @@ esp_err_t UlpIna219::lp_rtc_io_init_() {
   return ret;
 }
 
+void UlpIna219::enable_ulp_wake_src() {
+  esp_err_t ret = esp_sleep_enable_ulp_wakeup();
+  if (ret == ESP_OK) {
+    volatile ulp_ina219_context_t *ctx = get_ulp_context();
+    ctx->triggers_enabled = true;
+  } else {
+    ESP_LOGE(TAG, "triggers disabled, ulp wake en err: %d", ret);
+  }
+}
+
+void UlpIna219::reset_triggers(uint8_t bus_idx) {
+  if (this->is_valid_bus(bus_idx)) {
+    volatile ulp_ina219_context_t *ctx = get_ulp_context();
+    volatile wake_trigger_t *t = ctx->buses[bus_idx].triggers;
+
+    for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
+      if (t[i].status == TRIG_FIRED) {
+        t[i].status = TRIG_SET;
+        if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
+          t[i].condition.delta.baseline = INFINITY;
+        }
+      }
+    }
+  }
+}
+
 void UlpIna219::reset_values(uint8_t bus_idx) {
-  if (bus_idx < MAX_BUS) {
+  if (this->is_valid_bus(bus_idx)) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile bus_config_t *c = &ctx->buses[bus_idx].config;
     volatile bus_values_t *v = &ctx->buses[bus_idx].values;
@@ -199,12 +225,10 @@ void UlpIna219::reset_values(uint8_t bus_idx) {
     } else {
       ESP_LOGE(TAG, "reset values failed");
     }
-  } else {
-    ESP_LOGE(TAG, "Invalid bus idx %u", bus_idx);
   }
 }
 
-void UlpIna219::set_net_charge(uint8_t bus_idx, double charge) {
+void UlpIna219::set_net_charge(uint8_t bus_idx, float charge) {
   if (bus_idx < MAX_BUS) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile bus_values_t *v = &ctx->buses[bus_idx].values;
@@ -221,7 +245,7 @@ void UlpIna219::set_net_charge(uint8_t bus_idx, double charge) {
   }
 }
 
-void UlpIna219::set_net_energy(uint8_t bus_idx, double energy) {
+void UlpIna219::set_net_energy(uint8_t bus_idx, float energy) {
   if (bus_idx < MAX_BUS) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile bus_values_t *v = &ctx->buses[bus_idx].values;
@@ -242,19 +266,19 @@ void UlpIna219::update() {
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
 
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
-    if (!this->bus_enabled_[i])
+    volatile bus_config_t *c = &ctx->buses[i].config;
+    if (!(c->address > 0))
       continue;
 
-    volatile bus_values_t *b = &ctx->buses[i].values;
-    volatile bus_config_t *c = &ctx->buses[i].config;
+    volatile bus_values_t *v = &ctx->buses[i].values;
 
     ESP_LOGD(TAG,
              "Bus %c:\n"
              "  Calibration register: %u\n"
              "  Current LSB: %u\n",
-             'A' + i, b->calibration_register, b->current_lsb);
+             'A' + i, v->calibration_register, v->current_lsb);
 
-    esp_err_t bus_error_code = b->error_code;
+    esp_err_t bus_error_code = v->error_code;
     if (bus_error_code != ESP_OK) {
       ESP_LOGD(TAG, "Bus errored, code: 0x%X", bus_error_code);
       this->mark_failed("error reading device");
@@ -262,67 +286,67 @@ void UlpIna219::update() {
     }
 
     if (this->voltage_sensor_[i] != nullptr) {
-      this->voltage_sensor_[i]->publish_state(b->voltage);
+      this->voltage_sensor_[i]->publish_state(v->voltage);
     }
 
     if (this->current_sensor_[i] != nullptr) {
-      this->current_sensor_[i]->publish_state(b->current);
+      this->current_sensor_[i]->publish_state(v->current);
     }
 
     if (this->power_sensor_[i] != nullptr) {
-      this->power_sensor_[i]->publish_state(b->power);
+      this->power_sensor_[i]->publish_state(v->power);
     }
 
     if (this->shunt_voltage_sensor_[i] != nullptr) {
-      this->shunt_voltage_sensor_[i]->publish_state(b->shunt_voltage);
+      this->shunt_voltage_sensor_[i]->publish_state(v->shunt_voltage);
     }
 
     if (this->energy_net_sensor_[i] != nullptr) {
-      this->energy_net_sensor_[i]->publish_state(b->energy_net);
+      this->energy_net_sensor_[i]->publish_state(v->energy_net);
     }
 
     if (this->charge_net_sensor_[i] != nullptr) {
-      this->charge_net_sensor_[i]->publish_state(b->charge_net);
+      this->charge_net_sensor_[i]->publish_state(v->charge_net);
     }
 
     if (this->energy_in_sensor_[i] != nullptr) {
-      this->energy_in_sensor_[i]->publish_state(b->energy_in);
+      this->energy_in_sensor_[i]->publish_state(v->energy_in);
     }
 
     if (this->charge_in_sensor_[i] != nullptr) {
-      this->charge_in_sensor_[i]->publish_state(b->charge_in);
+      this->charge_in_sensor_[i]->publish_state(v->charge_in);
     }
 
     if (this->energy_out_sensor_[i] != nullptr) {
-      this->energy_out_sensor_[i]->publish_state(b->energy_out);
+      this->energy_out_sensor_[i]->publish_state(v->energy_out);
     }
 
     if (this->charge_out_sensor_[i] != nullptr) {
-      this->charge_out_sensor_[i]->publish_state(b->charge_out);
+      this->charge_out_sensor_[i]->publish_state(v->charge_out);
     }
 
     if (this->voltage_max_sensor_[i] != nullptr) {
-      this->voltage_max_sensor_[i]->publish_state(b->voltage_max);
+      this->voltage_max_sensor_[i]->publish_state(v->voltage_max);
     }
 
     if (this->voltage_min_sensor_[i] != nullptr) {
-      this->voltage_min_sensor_[i]->publish_state(b->voltage_min);
+      this->voltage_min_sensor_[i]->publish_state(v->voltage_min);
     }
 
     if (this->current_max_sensor_[i] != nullptr) {
-      this->current_max_sensor_[i]->publish_state(b->current_max);
+      this->current_max_sensor_[i]->publish_state(v->current_max);
     }
 
     if (this->current_min_sensor_[i] != nullptr) {
-      this->current_min_sensor_[i]->publish_state(b->current_min);
+      this->current_min_sensor_[i]->publish_state(v->current_min);
     }
 
     if (this->power_max_sensor_[i] != nullptr) {
-      this->power_max_sensor_[i]->publish_state(b->power_max);
+      this->power_max_sensor_[i]->publish_state(v->power_max);
     }
 
     if (this->power_min_sensor_[i] != nullptr) {
-      this->power_min_sensor_[i]->publish_state(b->power_min);
+      this->power_min_sensor_[i]->publish_state(v->power_min);
     }
   }
 
@@ -338,7 +362,7 @@ void UlpIna219::update() {
 void UlpIna219::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "ULP INA219:\n"
-                "  Sleep Duration: %d\n"
+                "  Sleep Duration: %u ms\n"
                 "  LP I2C:\n"
                 "    SDA Pin: %d\n"
                 "    SDA Pullup Enabled: %d\n"
@@ -353,7 +377,7 @@ void UlpIna219::dump_config() {
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile bus_config_t *c = &ctx->buses[i].config;
-    if (this->bus_enabled_[i]) {
+    if (c->address > 0) {
       ESP_LOGCONFIG(TAG,
                     "Bus %c:\n"
                     "  Address: 0x%X\n"
