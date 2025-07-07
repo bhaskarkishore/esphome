@@ -295,6 +295,7 @@ void UlpIna219::update() {
       continue;
 
     volatile bus_values_t *v = &ctx->buses[i].values;
+    volatile wake_trigger_t *t = ctx->buses[i].triggers;
 
     ESP_LOGD(TAG,
              "Bus %c:\n"
@@ -372,6 +373,19 @@ void UlpIna219::update() {
     if (this->power_min_sensor_[i] != nullptr) {
       this->power_min_sensor_[i]->publish_state(v->power_min);
     }
+
+    if (ctx->triggers_enabled) {
+      ESP_LOGD(TAG, "triggers:");
+      for (uint8_t j = 0; j < MAX_TRIGGERS; ++j) {
+        if (t[j] != TRIG_NOT_SET) {
+          ESP_LOGD(TAG,
+                   "  - mode: %u\n"
+                   "    status: %u\n"
+                   "    idx: %u\n",
+                   "    last_fired: %u ms", t[j].mode, t[j].status, j, t[j].last_fired_us);
+        }
+      }
+    }
   }
 
   ESP_LOGD(TAG,
@@ -401,6 +415,7 @@ void UlpIna219::dump_config() {
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile bus_config_t *c = &ctx->buses[i].config;
+    volatile wake_trigger_t *t = ctx->buses[i].triggers;
     if (c->address > 0) {
       ESP_LOGCONFIG(TAG,
                     "Bus %c:\n"
@@ -413,6 +428,25 @@ void UlpIna219::dump_config() {
                     "  Calibration Register: %u",
                     'A' + i, c->address, c->shunt_resistance, c->max_system_voltage, c->max_system_current,
                     c->current_accum_threshold, c->power_accum_threshold, c->calibration_register_override);
+      if (ctx->triggers_enabled) {
+        ESP_LOGCONFIG(TAG, "Triggers:");
+        for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
+          if (t[i].status != TRIG_NOT_SET) {
+            ESP_LOGCONFIG(TAG,
+                          "  - mode: %u\n"
+                          "    debounce: %u ms",
+                          t[i].mode, t[i].debounce_us);
+            if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
+              ESP_LOGCONFIG(TAG, "    threshold: %f", t[i].condition.delta.threshold);
+            } else {
+              ESP_LOGCONFIG(TAG,
+                            "    above: %f\n"
+                            "    below: %f\n",
+                            t[i].condition.range.above, t[i].condition.range.below);
+            }
+          }
+        }
+      }
       LOG_SENSOR("  ", "Voltage", this->voltage_sensor_[i]);
       LOG_SENSOR("  ", "Current", this->current_sensor_[i]);
       LOG_SENSOR("  ", "Power", this->power_sensor_[i]);

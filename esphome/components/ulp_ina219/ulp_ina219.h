@@ -12,6 +12,7 @@ namespace ulp_ina219 {
 
 class UlpIna219 : public PollingComponent {
  public:
+  UlpIna219() : PollingComponent(0) {}
   void setup() override;
   void update() override;
   void dump_config() override;
