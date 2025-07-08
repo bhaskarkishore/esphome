@@ -50,51 +50,68 @@ void UlpIna219::on_powerdown() {
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup");
 
-  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
   ctx->main_cpu_awake = true;
 
-  if (ctx->prg_state == PRG_STATE_NONE || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
-    ulp_lp_core_stop();
-
-    esp_err_t ret = this->lp_i2c_init_();
-    if (ret != ESP_OK) {
-      this->mark_failed("Unable to initialize ulp i2c");
-      return;
-    }
-
-    ret = this->lp_core_init_();
-    if (ret != ESP_OK) {
-      this->mark_failed("Unable to initialize ulp core");
-      return;
-    }
-  } else {
+  if (this->lp_program_load_status_ == ULP_PROGRAM_LOAD_PREV) {
     // Recalibrate the slow clock period
     ctx->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
     esp_sleep_enable_ulp_wakeup();
-    ESP_LOGCONFIG(TAG, "Ulp already running");
+    ESP_LOGCONFIG(TAG, "ulp already running");
+    return;
+  }
+
+  if (this->lp_program_load_status_ == ULP_PROGRAM_LOAD_COMPLETE) {
+    esp_err_t ret = this->ulp_i2c_init_();
+    if (ret != ESP_OK) {
+      ESP_LOGE(TAG, "ulp i2c init failed: %u", ret);
+      this->mark_failed();
+      return;
+    }
+
+    ret = this->ulp_rtc_io_init_();
+    if (ret != ESP_OK) {
+      ESP_LOGE(TAG, "ulp io init failed: %u", ret);
+      this->mark_failed();
+      return;
+    }
+
+    ret = this->ulp_core_init_();
+    if (ret != ESP_OK) {
+      ESP_LOGE(TAG, "ulp core init failed: %u", ret);
+      this->mark_failed();
+      return;
+    }
+  } else {
+    this->mark_failed("invalid ulp program state");
   }
 }
 
-esp_err_t UlpIna219::lp_core_init_() {
+UlpProgramLoadStatusEnum UlpIna219::lp_core_load_program_() {
+  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
+
+  if (ctx->prg_state == PRG_STATE_NONE || cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    ulp_lp_core_stop();
+    esp_err_t ret = ulp_lp_core_load_binary(lp_core_main_bin_start, (lp_core_main_bin_end - lp_core_main_bin_start));
+    if (ret == ESP_OK) {
+      return ULP_PROGRAM_LOAD_COMPLETE;
+    } else {
+      ESP_LOGE(TAG, "ulp prg load failed: %u", ret);
+      return ULP_PROGRAM_LOAD_ERROR;
+    }
+  }
+
+  return ULP_PROGRAM_LOAD_PREV;
+}
+
+esp_err_t UlpIna219::ulp_core_init_() {
   esp_err_t ret = ESP_OK;
 
   ulp_lp_core_cfg_t cfg = {.wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
                            .lp_timer_sleep_duration_us = this->sleep_duration_ * 1000};
 
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
-
-  ret = ulp_lp_core_load_binary(lp_core_main_bin_start, (lp_core_main_bin_end - lp_core_main_bin_start));
-  if (ret != ESP_OK) {
-    ESP_LOGD(TAG, "Ulp binary load failed");
-    return ret;
-  }
-
-  ret = this->lp_rtc_io_init_();
-  if (ret != ESP_OK) {
-    this->mark_failed("Ulp io init failed");
-    return ret;
-  }
 
   ctx->slow_clk_period = rtc_clk_cal(RTC_CAL_RTC_MUX, 1000);
 
@@ -133,7 +150,7 @@ esp_err_t UlpIna219::lp_core_init_() {
   return ret;
 }
 
-esp_err_t UlpIna219::lp_i2c_init_() {
+esp_err_t UlpIna219::ulp_i2c_init_() {
   const lp_core_i2c_cfg_t i2c_cfg = {
       .i2c_pin_cfg =
           {
@@ -151,7 +168,7 @@ esp_err_t UlpIna219::lp_i2c_init_() {
   return lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg);
 }
 
-esp_err_t UlpIna219::lp_rtc_io_init_() {
+esp_err_t UlpIna219::ulp_rtc_io_init_() {
   esp_err_t ret = ESP_OK;
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
   ctx->led.interval = 0;
@@ -198,7 +215,7 @@ void UlpIna219::reset_triggers(uint8_t bus_idx) {
 
 void UlpIna219::set_trigger(uint8_t bus_idx, uint8_t trg_idx, wake_trigger_mode_enum_t mode, uint32_t debounce_ms,
                             float above, float below, float threshold) {
-  if (is_valid_bus(bus_idx)) {
+  if (is_valid_bus(bus_idx) && this->lp_program_load_status_ == ULP_PROGRAM_LOAD_COMPLETE) {
     if (trg_idx < MAX_TRIGGERS) {
       volatile ulp_ina219_context_t *ctx = get_ulp_context();
       volatile wake_trigger_t *t = ctx->buses[bus_idx].triggers;
@@ -310,6 +327,20 @@ void UlpIna219::update() {
       continue;
     }
 
+    if (ctx->triggers_enabled) {
+      ESP_LOGD(TAG, "  triggers:");
+      for (uint8_t j = 0; j < MAX_TRIGGERS; ++j) {
+        if (t[j].status != TRIG_NOT_SET) {
+          ESP_LOGD(TAG,
+                   "    - mode: %d\n"
+                   "      status: %d\n"
+                   "      idx: %u\n"
+                   "      last_fired: %u ms",
+                   t[j].mode, t[j].status, j, t[j].last_fired_us);
+        }
+      }
+    }
+
     if (this->voltage_sensor_[i] != nullptr) {
       this->voltage_sensor_[i]->publish_state(v->voltage);
     }
@@ -373,19 +404,6 @@ void UlpIna219::update() {
     if (this->power_min_sensor_[i] != nullptr) {
       this->power_min_sensor_[i]->publish_state(v->power_min);
     }
-
-    if (ctx->triggers_enabled) {
-      ESP_LOGD(TAG, "triggers:");
-      for (uint8_t j = 0; j < MAX_TRIGGERS; ++j) {
-        if (t[j] != TRIG_NOT_SET) {
-          ESP_LOGD(TAG,
-                   "  - mode: %u\n"
-                   "    status: %u\n"
-                   "    idx: %u\n",
-                   "    last_fired: %u ms", t[j].mode, t[j].status, j, t[j].last_fired_us);
-        }
-      }
-    }
   }
 
   ESP_LOGD(TAG,
@@ -429,19 +447,19 @@ void UlpIna219::dump_config() {
                     'A' + i, c->address, c->shunt_resistance, c->max_system_voltage, c->max_system_current,
                     c->current_accum_threshold, c->power_accum_threshold, c->calibration_register_override);
       if (ctx->triggers_enabled) {
-        ESP_LOGCONFIG(TAG, "Triggers:");
+        ESP_LOGCONFIG(TAG, "  Triggers:");
         for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
           if (t[i].status != TRIG_NOT_SET) {
             ESP_LOGCONFIG(TAG,
-                          "  - mode: %u\n"
-                          "    debounce: %u ms",
+                          "    - mode: %u\n"
+                          "      debounce: %u ms",
                           t[i].mode, t[i].debounce_us);
             if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
-              ESP_LOGCONFIG(TAG, "    threshold: %f", t[i].condition.delta.threshold);
+              ESP_LOGCONFIG(TAG, "      threshold: %f", t[i].condition.delta.threshold);
             } else {
               ESP_LOGCONFIG(TAG,
-                            "    above: %f\n"
-                            "    below: %f\n",
+                            "      above: %f\n"
+                            "      below: %f\n",
                             t[i].condition.range.above, t[i].condition.range.below);
             }
           }

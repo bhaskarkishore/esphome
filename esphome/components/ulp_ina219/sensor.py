@@ -460,7 +460,7 @@ async def set_reset_values_action_to_code(config, action_id, template_arg, args)
 
 
 @automation.register_action(
-    "ulp_ina219.reset_values",
+    "ulp_ina219.reset_triggers",
     ResetTriggersAction,
     RESET_VALUES_ACTION_SCHEMA,
 )

@@ -10,14 +10,27 @@
 namespace esphome {
 namespace ulp_ina219 {
 
+enum UlpProgramLoadStatusEnum {
+  ULP_PROGRAM_LOAD_NONE = 0,
+  ULP_PROGRAM_LOAD_PREV,
+  ULP_PROGRAM_LOAD_COMPLETE,
+  ULP_PROGRAM_LOAD_ERROR
+};
+
 class UlpIna219 : public PollingComponent {
  public:
-  UlpIna219() : PollingComponent(0) {}
+  UlpIna219() : PollingComponent(0) {
+    // We initialize rtc memory here so that subsequent set_* fn
+    // calls can write config directly to lp memory instead of
+    // having to duplicate variables in hp memory and then
+    // copy them during setup().
+    lp_program_load_status_ = lp_core_load_program_();
+  }
+
   void setup() override;
   void update() override;
   void dump_config() override;
   void on_powerdown() override;
-  float get_setup_priority() const override { return setup_priority::DATA; }
 
   void set_voltage_sensor(uint8_t bus_idx, sensor::Sensor *voltage_sensor) {
     if (is_valid_bus(bus_idx)) {
@@ -188,6 +201,7 @@ class UlpIna219 : public PollingComponent {
   gpio_num_t lp_scl_pin_ = GPIO_NUM_NC;
   bool lp_sda_pullup_en_ = true;
   bool lp_scl_pullup_en_ = true;
+  UlpProgramLoadStatusEnum lp_program_load_status_ = ULP_PROGRAM_LOAD_NONE;
 
   gpio_num_t led_pin_ = GPIO_NUM_NC;
   uint8_t led_interval_ = 0;
@@ -215,9 +229,10 @@ class UlpIna219 : public PollingComponent {
   sensor::Sensor *power_min_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *power_max_sensor_[MAX_BUS] = {nullptr, nullptr};
 
-  esp_err_t lp_core_init_();
-  esp_err_t lp_rtc_io_init_();
-  esp_err_t lp_i2c_init_();
+  esp_err_t ulp_core_init_();
+  esp_err_t ulp_rtc_io_init_();
+  esp_err_t ulp_i2c_init_();
+  UlpProgramLoadStatusEnum lp_core_load_program_();
 };
 
 template<typename... Ts> class SetNetChargeAction : public Action<Ts...>, public Parented<UlpIna219> {
