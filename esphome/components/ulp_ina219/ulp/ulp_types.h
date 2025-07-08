@@ -10,6 +10,9 @@ namespace esphome {
 namespace ulp_ina219 {
 #endif
 
+#include "soc/rtc.h"
+#include "soc/lp_timer_reg.h"
+
 #define MAX_BUS (2)
 #define MAX_TRIGGERS (3)
 static const uint32_t SAMPLING_DELAY_WAIT_US = 75 * 1000;
@@ -18,6 +21,19 @@ static const uint32_t SAMPLING_DELAY_WAIT_US = 75 * 1000;
 // The ulp code is in C and modern language features may not
 // be support by its compiler.
 // NOLINTBEGIN(modernize-use-using)
+
+static uint64_t lp_core_get_rtc_ticks(void) {
+  uint32_t ticks_low, ticks_high;
+  REG_WRITE(LP_TIMER_UPDATE_REG, LP_TIMER_MAIN_TIMER_UPDATE);
+  ticks_low = REG_READ(LP_TIMER_MAIN_BUF0_LOW_REG);
+  ticks_high = REG_READ(LP_TIMER_MAIN_BUF0_HIGH_REG);
+  return ((uint64_t) ticks_high << 32) | ticks_low;
+}
+
+static uint64_t lp_core_rtc_ticks_to_us(uint64_t ticks, uint64_t period) {
+  return (ticks * period) >> RTC_CLK_CAL_FRACT;
+}
+
 typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUN, PRG_STATE_SLEEP, PRG_STATE_WAIT_SLEEP } program_state_enum_t;
 
 typedef enum {

@@ -1,8 +1,6 @@
 #include "ulp_lp_core_gpio.h"
-#include "soc/lp_timer_reg.h"
 #include "ulp_lp_core_utils.h"
 #include "ulp_lp_core_lp_timer_shared.h"
-#include "soc/rtc.h"
 #include "ina219.h"
 #include "ulp_types.h"
 #include <math.h>
@@ -24,18 +22,6 @@ static void min_max(float value, volatile float *min, volatile float *max, uint3
       *min = value;
     }
   }
-}
-
-static uint64_t lp_core_get_rtc_ticks(void) {
-  uint32_t ticks_low, ticks_high;
-  REG_WRITE(LP_TIMER_UPDATE_REG, LP_TIMER_MAIN_TIMER_UPDATE);
-  ticks_low = REG_READ(LP_TIMER_MAIN_BUF0_LOW_REG);
-  ticks_high = REG_READ(LP_TIMER_MAIN_BUF0_HIGH_REG);
-  return ((uint64_t) ticks_high << 32) | ticks_low;
-}
-
-static uint64_t lp_core_rtc_ticks_to_us(uint64_t ticks, uint64_t period) {
-  return (ticks * period) >> RTC_CLK_CAL_FRACT;
 }
 
 static void accumulate(volatile const bus_config_t *c, volatile bus_values_t *v, float previous_current,
@@ -145,7 +131,7 @@ static void check_triggers(uint8_t bus_idx) {
           t[i].status = TRIG_FIRED;
           t[i].last_fired_us = current_time_us;
           ulp_lp_core_wakeup_main_processor();
-          break;
+          return;
         }
       }
     }

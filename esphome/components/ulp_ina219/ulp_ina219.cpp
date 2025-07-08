@@ -201,10 +201,12 @@ void UlpIna219::reset_triggers(uint8_t bus_idx) {
   if (this->is_valid_bus(bus_idx)) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile wake_trigger_t *t = ctx->buses[bus_idx].triggers;
+    uint64_t current_time = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), ctx->slow_clk_period);
 
     for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
       if (t[i].status != TRIG_NOT_SET) {
         t[i].status = TRIG_SET;
+        t[i].last_fired_us = current_time;
         if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
           t[i].condition.delta.baseline = INFINITY;
         }
@@ -336,7 +338,7 @@ void UlpIna219::update() {
                    "      status: %d\n"
                    "      idx: %u\n"
                    "      last_fired: %u ms",
-                   t[j].mode, t[j].status, j, t[j].last_fired_us);
+                   t[j].mode, t[j].status, j, t[j].last_fired_us / 1000);
         }
       }
     }
@@ -453,7 +455,7 @@ void UlpIna219::dump_config() {
             ESP_LOGCONFIG(TAG,
                           "    - mode: %u\n"
                           "      debounce: %u ms",
-                          t[i].mode, t[i].debounce_us);
+                          t[i].mode, t[i].debounce_us / 1000);
             if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
               ESP_LOGCONFIG(TAG, "      threshold: %f", t[i].condition.delta.threshold);
             } else {
