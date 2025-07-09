@@ -129,43 +129,50 @@ class UlpIna219 : public PollingComponent {
 
   void set_address(uint8_t bus_idx, uint8_t address) {
     if (is_valid_bus(bus_idx)) {
-      bus_config_[bus_idx].address = address;
+      ulp_ina219_context_t *ctx = get_ulp_context();
+      ctx->buses[bus_idx].config.address = address;
     }
   }
 
   void set_shunt_resistance(uint8_t bus_idx, float shunt_resistance) {
     if (is_valid_bus(bus_idx)) {
-      bus_config_[bus_idx].shunt_resistance = shunt_resistance;
+      ulp_ina219_context_t *ctx = get_ulp_context();
+      ctx->buses[bus_idx].config.shunt_resistance = shunt_resistance;
     }
   }
 
   void set_max_system_voltage(uint8_t bus_idx, float max_system_voltage) {
     if (is_valid_bus(bus_idx)) {
-      bus_config_[bus_idx].max_system_voltage = max_system_voltage;
+      ulp_ina219_context_t *ctx = get_ulp_context();
+      ctx->buses[bus_idx].config.max_system_voltage = max_system_voltage;
     }
   }
 
   void set_max_system_current(uint8_t bus_idx, float max_system_current) {
     if (is_valid_bus(bus_idx)) {
-      bus_config_[bus_idx].max_system_current = max_system_current;
+      ulp_ina219_context_t *ctx = get_ulp_context();
+      ctx->buses[bus_idx].config.max_system_current = max_system_current;
     }
   }
 
   void set_current_accum_threshold(uint8_t bus_idx, float current_accum_threshold) {
     if (is_valid_bus(bus_idx)) {
-      bus_config_[bus_idx].current_accum_threshold = current_accum_threshold;
+      ulp_ina219_context_t *ctx = get_ulp_context();
+      ctx->buses[bus_idx].config.current_accum_threshold = current_accum_threshold;
     }
   }
 
   void set_power_accum_threshold(uint8_t bus_idx, float power_accum_threshold) {
     if (is_valid_bus(bus_idx)) {
-      bus_config_[bus_idx].power_accum_threshold = power_accum_threshold;
+      ulp_ina219_context_t *ctx = get_ulp_context();
+      ctx->buses[bus_idx].config.power_accum_threshold = power_accum_threshold;
     }
   }
 
   void set_calibration_register_override(uint8_t bus_idx, uint32_t calibration_register_override) {
     if (is_valid_bus(bus_idx)) {
-      bus_config_[bus_idx].calibration_register_override = calibration_register_override;
+      ulp_ina219_context_t *ctx = get_ulp_context();
+      ctx->buses[bus_idx].config.calibration_register_override = calibration_register_override;
     }
   }
 
@@ -202,15 +209,9 @@ class UlpIna219 : public PollingComponent {
   bool lp_sda_pullup_en_ = true;
   bool lp_scl_pullup_en_ = true;
   UlpProgramLoadStatusEnum ulp_program_load_status_ = ULP_PROGRAM_LOAD_NONE;
-
   gpio_num_t led_pin_ = GPIO_NUM_NC;
   uint8_t led_interval_ = 0;
   uint32_t sleep_duration_ = 0;
-  BusConfigStruct bus_config_[MAX_BUS] = {};
-
-  static ulp_ina219_context_t *get_ulp_context();
-  static bool wait_for_ulp_sleep();
-  static bool is_valid_bus(uint8_t bus_idx);
 
   sensor::Sensor *voltage_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *current_sensor_[MAX_BUS] = {nullptr, nullptr};
@@ -229,43 +230,17 @@ class UlpIna219 : public PollingComponent {
   sensor::Sensor *power_min_sensor_[MAX_BUS] = {nullptr, nullptr};
   sensor::Sensor *power_max_sensor_[MAX_BUS] = {nullptr, nullptr};
 
+  static ulp_ina219_context_t *get_ulp_context();
+  static bool wait_for_ulp_sleep();
+  static bool is_valid_bus(uint8_t bus_idx);
+
   esp_err_t ulp_core_init_();
   esp_err_t ulp_rtc_io_init_();
   esp_err_t ulp_i2c_init_();
   UlpProgramLoadStatusEnum lp_core_load_program_();
 };
 
-template<typename... Ts> class SetNetChargeAction : public Action<Ts...>, public Parented<UlpIna219> {
- public:
-  TEMPLATABLE_VALUE(uint8_t, bus_idx)
-  TEMPLATABLE_VALUE(float, value)
-
-  void play(Ts... x) override { this->parent_->set_net_charge(this->bus_idx_.value(x...), this->value_.value(x...)); }
-};
-
-template<typename... Ts> class SetNetEnergyAction : public Action<Ts...>, public Parented<UlpIna219> {
- public:
-  TEMPLATABLE_VALUE(uint8_t, bus_idx)
-  TEMPLATABLE_VALUE(float, value)
-
-  void play(Ts... x) override { this->parent_->set_net_energy(this->bus_idx_.value(x...), this->value_.value(x...)); }
-};
-
-template<typename... Ts> class ResetValuesAction : public Action<Ts...>, public Parented<UlpIna219> {
- public:
-  TEMPLATABLE_VALUE(uint8_t, bus_idx)
-
-  void play(Ts... x) override { this->parent_->reset_values(this->bus_idx_.value(x...)); }
-};
-
-template<typename... Ts> class ResetTriggersAction : public Action<Ts...>, public Parented<UlpIna219> {
- public:
-  TEMPLATABLE_VALUE(uint8_t, bus_idx)
-
-  void play(Ts... x) override { this->parent_->reset_triggers(this->bus_idx_.value(x...)); }
-};
-
 }  // namespace ulp_ina219
 }  // namespace esphome
 
-#endif
+#endif  // ULP_INA219_H

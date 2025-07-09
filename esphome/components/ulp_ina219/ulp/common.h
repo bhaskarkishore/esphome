@@ -52,7 +52,7 @@ typedef enum {
 
 typedef enum { TRIG_NOT_SET = 0, TRIG_SET, TRIG_FIRED } wake_trigger_status_enum_t;
 
-typedef union {
+typedef union WakeConditions {
   struct {
     float above;
     float below;
@@ -63,7 +63,7 @@ typedef union {
   } delta;
 } wake_trigger_conditions_t;
 
-typedef struct {
+typedef struct WakeTrigger {
   wake_trigger_mode_enum_t mode;
   wake_trigger_status_enum_t status;
   wake_trigger_conditions_t condition;
@@ -71,13 +71,13 @@ typedef struct {
   uint32_t debounce_us;
 } wake_trigger_t;
 
-typedef struct {
+typedef struct ActivityLed {
   int8_t pin;
   uint8_t counter;
   uint8_t interval;
 } activity_led_t;
 
-typedef volatile struct BusConfigStruct {
+typedef volatile struct BusConfig {
   uint32_t calibration_register_override;
   float max_system_voltage;
   float max_system_current;
@@ -89,7 +89,7 @@ typedef volatile struct BusConfigStruct {
   uint8_t reset_accumulators;
 } bus_config_t;
 
-typedef volatile struct {
+typedef volatile struct BusValues {
   uint64_t last_sample_time;
   float charge_net;
   float charge_in;
@@ -112,13 +112,13 @@ typedef volatile struct {
   float power_max;
 } bus_values_t;
 
-typedef volatile struct {
+typedef volatile struct Bus {
   bus_config_t config;
   bus_values_t values;
   wake_trigger_t triggers[MAX_TRIGGERS];
 } bus_t;
 
-typedef volatile struct {
+typedef volatile struct UlpIna219Context {
   bus_t buses[MAX_BUS];
   activity_led_t led;
   uint64_t run_duration;

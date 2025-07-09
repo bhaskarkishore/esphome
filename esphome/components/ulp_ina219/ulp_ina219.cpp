@@ -29,12 +29,6 @@ extern const uint8_t lp_core_main_bin_end[] asm("_binary_ulp_main_bin_end");
 
 ulp_ina219_context_t *UlpIna219::get_ulp_context() { return reinterpret_cast<ulp_ina219_context_t *>(&ulp_ctx); }
 
-void UlpIna219::on_powerdown() {
-  volatile ulp_ina219_context_t *ctx = get_ulp_context();
-  ctx->main_cpu_awake = false;
-  c->reset_min_max = true;
-}
-
 void UlpIna219::setup() {
   ESP_LOGCONFIG(TAG, "Running setup");
 
@@ -106,15 +100,8 @@ esp_err_t UlpIna219::ulp_core_init_() {
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile bus_config_t *c = &ctx->buses[i].config;
 
-    if (this->bus_config_[i].address > 0) {
+    if (c->address > 0) {
       ESP_LOGD(TAG, "Bus %c enabled", i == 0 ? 'A' : 'B');
-      c->max_system_voltage = this->bus_config_[i].max_system_voltage;
-      c->max_system_current = this->bus_config_[i].max_system_current;
-      c->address = this->bus_config_[i].address;
-      c->shunt_resistance = this->bus_config_[i].shunt_resistance;
-      c->current_accum_threshold = this->bus_config_[i].current_accum_threshold;
-      c->power_accum_threshold = this->bus_config_[i].power_accum_threshold;
-      c->calibration_register_override = this->bus_config_[i].calibration_register_override;
       c->reset_min_max = true;
       c->reset_accumulators = true;
     } else {
@@ -174,6 +161,14 @@ esp_err_t UlpIna219::ulp_rtc_io_init_() {
     }
   }
   return ret;
+}
+
+void UlpIna219::on_powerdown() {
+  volatile ulp_ina219_context_t *ctx = get_ulp_context();
+  ctx->main_cpu_awake = false;
+  for (uint8_t i = 0; i < MAX_BUS; ++i) {
+    ctx->buses[i].config.reset_min_max = true;
+  }
 }
 
 void UlpIna219::enable_ulp_wake_src() {
