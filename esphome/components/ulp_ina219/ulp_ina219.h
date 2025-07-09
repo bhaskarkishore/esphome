@@ -5,7 +5,7 @@
 
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
-#include "ulp/ulp_types.h"
+#include "ulp/common.h"
 
 namespace esphome {
 namespace ulp_ina219 {
@@ -24,7 +24,7 @@ class UlpIna219 : public PollingComponent {
     // calls can write config directly to lp memory instead of
     // having to duplicate variables in hp memory and then
     // copy them during setup().
-    lp_program_load_status_ = lp_core_load_program_();
+    ulp_program_load_status_ = lp_core_load_program_();
   }
 
   void setup() override;
@@ -201,7 +201,7 @@ class UlpIna219 : public PollingComponent {
   gpio_num_t lp_scl_pin_ = GPIO_NUM_NC;
   bool lp_sda_pullup_en_ = true;
   bool lp_scl_pullup_en_ = true;
-  UlpProgramLoadStatusEnum lp_program_load_status_ = ULP_PROGRAM_LOAD_NONE;
+  UlpProgramLoadStatusEnum ulp_program_load_status_ = ULP_PROGRAM_LOAD_NONE;
 
   gpio_num_t led_pin_ = GPIO_NUM_NC;
   uint8_t led_interval_ = 0;

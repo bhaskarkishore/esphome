@@ -2,7 +2,7 @@
 #include "ulp_lp_core_utils.h"
 #include "ulp_lp_core_lp_timer_shared.h"
 #include "ina219.h"
-#include "ulp_types.h"
+#include "common.h"
 #include <math.h>
 #include "esp_err.h"
 

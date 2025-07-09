@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef ULPINA219_ULPTYPES_H
-#define ULPINA219_ULPTYPES_H
+#ifndef ULPINA219_COMMON_H
+#define ULPINA219_COMMON_H
 
 #include "esp_err.h"
 
@@ -11,7 +11,7 @@ namespace ulp_ina219 {
 #endif
 
 #include "soc/rtc.h"
-#include "soc/lp_timer_reg.h"
+#include "soc/lp_timer_reg.h"  // NOLINT(clang-diagnostic-error)
 
 #define MAX_BUS (2)
 #define MAX_TRIGGERS (3)
@@ -22,7 +22,7 @@ static const uint32_t SAMPLING_DELAY_WAIT_US = 75 * 1000;
 // be support by its compiler.
 // NOLINTBEGIN(modernize-use-using)
 
-static uint64_t lp_core_get_rtc_ticks(void) {
+static uint64_t lp_core_get_rtc_ticks() {
   uint32_t ticks_low, ticks_high;
   REG_WRITE(LP_TIMER_UPDATE_REG, LP_TIMER_MAIN_TIMER_UPDATE);
   ticks_low = REG_READ(LP_TIMER_MAIN_BUF0_LOW_REG);
@@ -134,4 +134,4 @@ typedef volatile struct {
 }  // namespace esphome
 #endif
 
-#endif  // ULPINA219_ULPTYPES_H
+#endif  // ULPINA219_COMMON_H

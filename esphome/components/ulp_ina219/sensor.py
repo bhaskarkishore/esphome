@@ -74,7 +74,7 @@ from .const import (
 
 DEPENDENCIES = ["esp32"]
 
-ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c", "ulp_types.h"]
+ULP_FILES = ["main.c", "ina219.h", "ina219.c", "i2c.h", "i2c.c", "common.h"]
 
 BUS_KEYS = [CONF_BUS_A, CONF_BUS_B]
 
@@ -248,7 +248,7 @@ TRIGGER_MODES = {
 
 DELTA_MODES = [CONF_CHARGE_DELTA, CONF_ENERGY_DELTA]
 
-RANGE_MODES = [key for key in TRIGGER_MODES.keys() if key not in DELTA_MODES]
+RANGE_MODES = [key for key in TRIGGER_MODES if key not in DELTA_MODES]
 
 
 def validate_trigger(value):
