@@ -85,7 +85,8 @@ typedef volatile struct BusConfigStruct {
   float current_accum_threshold;
   float power_accum_threshold;
   uint8_t address;
-  uint8_t reset;
+  uint8_t reset_min_max;
+  uint8_t reset_accumulators;
 } bus_config_t;
 
 typedef volatile struct {

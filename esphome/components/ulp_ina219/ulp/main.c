@@ -46,7 +46,7 @@ static void accumulate(volatile const bus_config_t *c, volatile bus_values_t *v,
     }
   }
 
-  if (c->reset) {
+  if (c->reset_accumulators) {
     // The following ensures that the present sample is not lost
     // when reset is called by the main cpu. This may help improve
     // accuracy in cases where the ulp cpu sleeps for long
@@ -155,15 +155,16 @@ static void update() {
       ina219_current(c->address, &v->current, v->current_lsb);
 
       // Compute min max
-      min_max(v->current, &v->current_min, &v->current_max, c->reset);
-      min_max(v->power, &v->power_min, &v->power_max, c->reset);
-      min_max(v->voltage, &v->voltage_min, &v->voltage_max, c->reset);
+      min_max(v->current, &v->current_min, &v->current_max, c->reset_min_max);
+      min_max(v->power, &v->power_min, &v->power_max, c->reset_min_max);
+      min_max(v->voltage, &v->voltage_min, &v->voltage_max, c->reset_min_max);
 
       // Accumulate current and energy
       accumulate(c, v, previous_current, previous_power);
 
       // Clear reset if set
-      c->reset = false;
+      c->reset_min_max = false;
+      c->reset_accumulators = false;
 
       // Power down
       ina219_power_down(c->address);

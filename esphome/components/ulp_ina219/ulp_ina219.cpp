@@ -32,6 +32,7 @@ ulp_ina219_context_t *UlpIna219::get_ulp_context() { return reinterpret_cast<ulp
 void UlpIna219::on_powerdown() {
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
   ctx->main_cpu_awake = false;
+  c->reset_min_max = true;
 }
 
 void UlpIna219::setup() {
@@ -114,7 +115,8 @@ esp_err_t UlpIna219::ulp_core_init_() {
       c->current_accum_threshold = this->bus_config_[i].current_accum_threshold;
       c->power_accum_threshold = this->bus_config_[i].power_accum_threshold;
       c->calibration_register_override = this->bus_config_[i].calibration_register_override;
-      c->reset = true;
+      c->reset_min_max = true;
+      c->reset_accumulators = true;
     } else {
       c->address = 0x0;
       ESP_LOGD(TAG, "Bus %c disabled", 'A' + i);
