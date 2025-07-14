@@ -2,9 +2,11 @@
 #include "ulp_lp_core.h"  // NOLINT(clang-diagnostic-error)
 #include "lp_core_i2c.h"
 #include "soc/rtc.h"
+#include "soc/gpio_num.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
+#include "esphome/core/gpio.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include "ulp_ina219.h"
@@ -17,7 +19,7 @@
 namespace esphome {
 namespace ulp_ina219 {
 
-static const char *const TAG = "ulp_219";
+static const char *const TAG = "ulp_ina219";
 static const uint32_t ULP_INA219_WAIT_TIMEOUT = 10;
 
 // The following references are defined by the esp idf sdk as part of
@@ -127,13 +129,17 @@ esp_err_t UlpIna219::ulp_core_init_() {
 }
 
 esp_err_t UlpIna219::ulp_i2c_init_() {
+  if (this->lp_scl_pin_ == nullptr || this->lp_sda_pin_ == nullptr) {
+    this->mark_failed("lp i2c pins null");
+    return ESP_FAIL;
+  }
   const lp_core_i2c_cfg_t i2c_cfg = {
       .i2c_pin_cfg =
           {
-              .sda_io_num = this->lp_sda_pin_,
-              .scl_io_num = this->lp_scl_pin_,
-              .sda_pullup_en = this->lp_sda_pullup_en_,
-              .scl_pullup_en = this->lp_scl_pullup_en_,
+              .sda_io_num = gpio_num_t(this->lp_sda_pin_->get_pin()),
+              .scl_io_num = gpio_num_t(this->lp_scl_pin_->get_pin()),
+              .sda_pullup_en = this->lp_scl_pin_->get_flags() & gpio::FLAG_PULLUP ? true : false,
+              .scl_pullup_en = this->lp_scl_pin_->get_flags() & gpio::FLAG_PULLUP ? true : false,
           },
       .i2c_timing_cfg =
           {
@@ -149,15 +155,17 @@ esp_err_t UlpIna219::ulp_rtc_io_init_() {
   volatile ulp_ina219_context_t *ctx = get_ulp_context();
   ctx->led.interval = 0;
   ctx->led.pin = -1;
+  gpio_num_t led_pin = this->led_pin_ == nullptr ? GPIO_NUM_NC : gpio_num_t(this->led_pin_->get_pin());
 
-  if (this->led_pin_ != GPIO_NUM_NC && this->led_interval_ > 0) {
-    ret = rtc_gpio_init(this->led_pin_);
+  if (led_pin != GPIO_NUM_NC && this->led_interval_ > 0) {
+    ret = rtc_gpio_init(led_pin);
     if (ret == ESP_OK) {
-      rtc_gpio_set_direction(this->led_pin_, RTC_GPIO_MODE_OUTPUT_ONLY);
-      rtc_gpio_pulldown_dis(this->led_pin_);
-      rtc_gpio_pullup_dis(this->led_pin_);
+      rtc_gpio_set_direction(led_pin, RTC_GPIO_MODE_OUTPUT_ONLY);
+      rtc_gpio_pulldown_dis(led_pin);
+      rtc_gpio_pullup_dis(led_pin);
       ctx->led.interval = this->led_interval_;
-      ctx->led.pin = this->led_pin_;
+      ctx->led.pin = led_pin;
+      ctx->led.inverted = this->led_pin_->is_inverted();
     }
   }
   return ret;
@@ -252,7 +260,6 @@ void UlpIna219::reset_values(uint8_t bus_idx) {
       v->voltage_max = v->voltage;
       v->current_min = v->current;
       v->current_max = v->current;
-      this->update();
     } else {
       ESP_LOGE(TAG, "reset values err");
     }
@@ -265,9 +272,6 @@ void UlpIna219::set_net_charge(uint8_t bus_idx, float charge) {
     volatile bus_values_t *v = &ctx->buses[bus_idx].values;
     if (wait_for_ulp_sleep()) {
       v->charge_net = charge;
-      if (this->charge_net_sensor_[bus_idx] != nullptr) {
-        this->charge_net_sensor_[bus_idx]->publish_state(v->charge_net);
-      }
     } else {
       ESP_LOGE(TAG, "net_charge not set");
     }
@@ -282,9 +286,6 @@ void UlpIna219::set_net_energy(uint8_t bus_idx, float energy) {
     volatile bus_values_t *v = &ctx->buses[bus_idx].values;
     if (wait_for_ulp_sleep()) {
       v->energy_net = energy;
-      if (this->energy_net_sensor_[bus_idx] != nullptr) {
-        this->energy_net_sensor_[bus_idx]->publish_state(v->energy_net);
-      }
     } else {
       ESP_LOGE(TAG, "net_energy not set");
     }
@@ -302,132 +303,19 @@ bool UlpIna219::is_valid_bus(uint8_t bus_idx) {
   }
 }
 
-void UlpIna219::update() {
-  volatile ulp_ina219_context_t *ctx = get_ulp_context();
-
-  for (uint8_t i = 0; i < MAX_BUS; ++i) {
-    volatile bus_config_t *c = &ctx->buses[i].config;
-    if (!(c->address > 0))
-      continue;
-
-    volatile bus_values_t *v = &ctx->buses[i].values;
-    volatile wake_trigger_t *t = ctx->buses[i].triggers;
-
-    ESP_LOGD(TAG,
-             "Bus %c:\n"
-             "  Calibration register: %u\n"
-             "  Current LSB: %u\n",
-             'A' + i, v->calibration_register, v->current_lsb);
-
-    esp_err_t bus_error_code = v->error_code;
-    if (bus_error_code != ESP_OK) {
-      ESP_LOGD(TAG, "Bus errored, code: 0x%X", bus_error_code);
-      this->mark_failed("error reading device");
-      continue;
-    }
-
-    if (ctx->triggers_enabled) {
-      ESP_LOGD(TAG, "  triggers:");
-      for (uint8_t j = 0; j < MAX_TRIGGERS; ++j) {
-        if (t[j].status != TRIG_NOT_SET) {
-          ESP_LOGD(TAG,
-                   "    - mode: %d\n"
-                   "      status: %d\n"
-                   "      idx: %u\n"
-                   "      last_fired: %u ms",
-                   t[j].mode, t[j].status, j, t[j].last_fired_us / 1000);
-        }
-      }
-    }
-
-    if (this->voltage_sensor_[i] != nullptr) {
-      this->voltage_sensor_[i]->publish_state(v->voltage);
-    }
-
-    if (this->current_sensor_[i] != nullptr) {
-      this->current_sensor_[i]->publish_state(v->current);
-    }
-
-    if (this->power_sensor_[i] != nullptr) {
-      this->power_sensor_[i]->publish_state(v->power);
-    }
-
-    if (this->shunt_voltage_sensor_[i] != nullptr) {
-      this->shunt_voltage_sensor_[i]->publish_state(v->shunt_voltage);
-    }
-
-    if (this->energy_net_sensor_[i] != nullptr) {
-      this->energy_net_sensor_[i]->publish_state(v->energy_net);
-    }
-
-    if (this->charge_net_sensor_[i] != nullptr) {
-      this->charge_net_sensor_[i]->publish_state(v->charge_net);
-    }
-
-    if (this->energy_in_sensor_[i] != nullptr) {
-      this->energy_in_sensor_[i]->publish_state(v->energy_in);
-    }
-
-    if (this->charge_in_sensor_[i] != nullptr) {
-      this->charge_in_sensor_[i]->publish_state(v->charge_in);
-    }
-
-    if (this->energy_out_sensor_[i] != nullptr) {
-      this->energy_out_sensor_[i]->publish_state(v->energy_out);
-    }
-
-    if (this->charge_out_sensor_[i] != nullptr) {
-      this->charge_out_sensor_[i]->publish_state(v->charge_out);
-    }
-
-    if (this->voltage_max_sensor_[i] != nullptr) {
-      this->voltage_max_sensor_[i]->publish_state(v->voltage_max);
-    }
-
-    if (this->voltage_min_sensor_[i] != nullptr) {
-      this->voltage_min_sensor_[i]->publish_state(v->voltage_min);
-    }
-
-    if (this->current_max_sensor_[i] != nullptr) {
-      this->current_max_sensor_[i]->publish_state(v->current_max);
-    }
-
-    if (this->current_min_sensor_[i] != nullptr) {
-      this->current_min_sensor_[i]->publish_state(v->current_min);
-    }
-
-    if (this->power_max_sensor_[i] != nullptr) {
-      this->power_max_sensor_[i]->publish_state(v->power_max);
-    }
-
-    if (this->power_min_sensor_[i] != nullptr) {
-      this->power_min_sensor_[i]->publish_state(v->power_min);
-    }
-  }
-
-  ESP_LOGD(TAG,
-           "ulp debug:\n"
-           "  run dur: %.3f ms\n"
-           "  slow clk: %u\n"
-           "  state: %u\n"
-           "  led cntr: %u",
-           (float) ctx->run_duration / 1000.f, ctx->slow_clk_period, ctx->prg_state, ctx->led.counter);
-}
-
 void UlpIna219::dump_config() {
   ESP_LOGCONFIG(TAG,
                 "ULP INA219:\n"
                 "  Sleep Duration: %u ms\n"
-                "  LP I2C:\n"
-                "    SDA Pin: %d\n"
-                "    SDA Pullup Enabled: %d\n"
-                "    SCL Pin: %d\n"
-                "    SCL Pullup Enabled: %d\n"
-                "  led:\n"
-                "    pin: %d\n"
-                "    interval: %d\n",
-                this->sleep_duration_, this->lp_sda_pin_, this->lp_sda_pullup_en_, this->lp_scl_pin_,
-                this->lp_scl_pullup_en_, this->led_pin_, this->led_interval_);
+                "  LP I2C:\n",
+                this->sleep_duration_);
+  LOG_PIN("    sda: ", this->lp_sda_pin_);
+  ESP_LOGCONFIG(TAG, "      pull up: %s", ONOFF(this->lp_sda_pin_->get_flags() & gpio::FLAG_PULLUP));
+  LOG_PIN("    scl: ", this->lp_scl_pin_);
+  ESP_LOGCONFIG(TAG, "      pull up: %s", ONOFF(this->lp_scl_pin_->get_flags() & gpio::FLAG_PULLUP));
+  ESP_LOGCONFIG(TAG, "  Activity Led:");
+  LOG_PIN("    pin: ", this->led_pin_);
+  ESP_LOGCONFIG(TAG, "    interval: %u", this->led_interval_);
 
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
@@ -435,55 +323,19 @@ void UlpIna219::dump_config() {
     volatile wake_trigger_t *t = ctx->buses[i].triggers;
     if (c->address > 0) {
       ESP_LOGCONFIG(TAG,
-                    "Bus %c:\n"
-                    "  Address: 0x%X\n"
-                    "  Shunt Resistance: %f\n"
-                    "  Max Voltage: %f\n"
-                    "  Max Current: %f\n"
-                    "  Current Accumulation Threshold: %f\n"
-                    "  Power Accumulation Threshold: %f\n"
-                    "  Calibration Register: %u",
-                    'A' + i, c->address, c->shunt_resistance, c->max_system_voltage, c->max_system_current,
+                    "  Bus %u:\n"
+                    "    Address: 0x%X\n"
+                    "    Shunt Resistance: %f\n"
+                    "    Max Voltage: %f\n"
+                    "    Max Current: %f\n"
+                    "    Current Accumulation Threshold: %f\n"
+                    "    Power Accumulation Threshold: %f\n"
+                    "    Calibration Register: %u",
+                    i, c->address, c->shunt_resistance, c->max_system_voltage, c->max_system_current,
                     c->current_accum_threshold, c->power_accum_threshold, c->calibration_register_override);
-      if (ctx->triggers_enabled) {
-        ESP_LOGCONFIG(TAG, "  Triggers:");
-        for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
-          if (t[i].status != TRIG_NOT_SET) {
-            ESP_LOGCONFIG(TAG,
-                          "    - mode: %u\n"
-                          "      debounce: %u ms",
-                          t[i].mode, t[i].debounce_us / 1000);
-            if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
-              ESP_LOGCONFIG(TAG, "      threshold: %f", t[i].condition.delta.threshold);
-            } else {
-              ESP_LOGCONFIG(TAG,
-                            "      above: %f\n"
-                            "      below: %f\n",
-                            t[i].condition.range.above, t[i].condition.range.below);
-            }
-          }
-        }
-      }
-      LOG_SENSOR("  ", "Voltage", this->voltage_sensor_[i]);
-      LOG_SENSOR("  ", "Current", this->current_sensor_[i]);
-      LOG_SENSOR("  ", "Power", this->power_sensor_[i]);
-      LOG_SENSOR("  ", "Shunt Voltage", this->shunt_voltage_sensor_[i]);
-      LOG_SENSOR("  ", "Energy (Net)", this->energy_net_sensor_[i]);
-      LOG_SENSOR("  ", "Energy (In)", this->energy_in_sensor_[i]);
-      LOG_SENSOR("  ", "Energy (Out)", this->energy_out_sensor_[i]);
-      LOG_SENSOR("  ", "Charge (Net)", this->charge_net_sensor_[i]);
-      LOG_SENSOR("  ", "Charge (In)", this->charge_in_sensor_[i]);
-      LOG_SENSOR("  ", "Charge (Out)", this->charge_out_sensor_[i]);
-      LOG_SENSOR("  ", "Voltage (max)", this->voltage_max_sensor_[i]);
-      LOG_SENSOR("  ", "Voltage (min)", this->voltage_min_sensor_[i]);
-      LOG_SENSOR("  ", "Current (max)", this->current_max_sensor_[i]);
-      LOG_SENSOR("  ", "Current (min)", this->current_min_sensor_[i]);
-      LOG_SENSOR("  ", "Power (max)", this->power_max_sensor_[i]);
-      LOG_SENSOR("  ", "Power (min)", this->power_min_sensor_[i]);
     }
   }
 
-  LOG_UPDATE_INTERVAL(this);
   if (this->is_failed()) {
     ESP_LOGE(TAG, ESP_LOG_MSG_COMM_FAIL);
   }

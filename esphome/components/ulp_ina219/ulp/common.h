@@ -73,6 +73,7 @@ typedef struct WakeTrigger {
 
 typedef struct ActivityLed {
   int8_t pin;
+  bool inverted;
   uint8_t counter;
   uint8_t interval;
 } activity_led_t;

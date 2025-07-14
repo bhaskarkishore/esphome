@@ -209,7 +209,7 @@ int main(void) {
     ctx.prg_state = PRG_STATE_RUN;
 
     if (led_active && ctx.led.counter >= ctx.led.interval) {
-      ulp_lp_core_gpio_set_level(ctx.led.pin, 1);
+      ulp_lp_core_gpio_set_level(ctx.led.pin, ctx.led.inverted ? 0 : 1);
       ctx.led.counter = 0;
     }
 
@@ -231,7 +231,7 @@ int main(void) {
 
   if (led_active) {
     ctx.led.counter++;
-    ulp_lp_core_gpio_set_level(ctx.led.pin, 0);
+    ulp_lp_core_gpio_set_level(ctx.led.pin, ctx.led.inverted ? 1 : 0);
   }
 
   ctx.run_duration =
