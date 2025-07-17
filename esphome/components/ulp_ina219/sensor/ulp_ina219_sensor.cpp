@@ -39,10 +39,11 @@ void UlpIna219Sensor::update() {
   volatile bus_values_t *v = &ctx->buses[this->bus_index_].values;
 
   ESP_LOGD(TAG,
-           "Bus index: %u\n"
-           "Calibration register: %u\n"
-           "Current lsb: %u"
-           "Error code: %d\n",
+           "Bus:"
+           "  index: %u\n"
+           "  Calibration register: %u\n"
+           "  Current lsb: %u\n"
+           "  Error code: %d\n",
            this->bus_index_, v->calibration_register, v->current_lsb, v->error_code);
 
   if (v->error_code != ESP_OK || this->parent_->is_failed()) {
@@ -70,10 +71,12 @@ void UlpIna219Sensor::update() {
   ESP_LOGD(TAG,
            "ulp info:\n"
            "  run dur: %.3f ms\n"
+           "  cycle dur: %.3f ms\n"
            "  slow clk: %u\n"
            "  state: %u\n"
            "  led cntr: %u",
-           (float) ctx->run_duration / 1000.f, ctx->slow_clk_period, ctx->prg_state, ctx->led.counter);
+           (float) ctx->run_duration / 1000.f, (float) ctx->cycle_duration / 1000.f, ctx->slow_clk_period,
+           ctx->prg_state, ctx->led.counter);
 }
 
 void UlpIna219Sensor::dump_config() {

@@ -15,7 +15,6 @@ namespace ulp_ina219 {
 
 #define MAX_BUS (2)
 #define MAX_ALARMS (3)
-static const uint32_t SAMPLING_DELAY_WAIT_US = 75 * 1000;
 
 // The following code is shared between the ulp and hp cpus.
 // The ulp code is in C and modern language features may not
@@ -123,10 +122,12 @@ typedef volatile struct UlpIna219Context {
   bus_t buses[MAX_BUS];
   activity_led_t led;
   uint64_t run_duration;
+  uint64_t cycle_duration;
   uint32_t slow_clk_period;
   program_state_enum_t prg_state;
   bool main_cpu_awake;
   bool alarms_enabled;
+  uint8_t samples_per_conversion;
 } ulp_ina219_context_t;
 
 // NOLINTEND(modernize-use-using)

@@ -32,6 +32,7 @@ from .const import (
     CONF_LP_GPIO_PINS,
     CONF_LP_I2C,
     CONF_POWER_ACCUM_THRESHOLD,
+    CONF_SAMPLES,
 )
 
 DEPENDENCIES = ["esp32"]
@@ -113,6 +114,13 @@ def validate_lp_scl_pin(value):
     return value
 
 
+def validate_samples(value):
+    valid_sample_values = [1, 2, 4, 8, 16, 32, 64, 128]
+    if value not in valid_sample_values:
+        raise cv.Invalid(f"samples must be one of {valid_sample_values}")
+    return value
+
+
 BUS_CONFIG_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_ADDRESS): cv.hex_uint8_t,
@@ -173,6 +181,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional("lp_i2c", default={}): LP_I2C_SCHEMA,
             cv.Optional(CONF_SLEEP_DURATION, default="177ms"): cv.templatable(
                 cv.positive_time_period_milliseconds
+            ),
+            cv.Optional(CONF_SAMPLES, default=128): cv.All(
+                cv.positive_int, validate_samples
             ),
         }
     ).extend(cv.COMPONENT_SCHEMA),
@@ -294,6 +305,8 @@ async def to_code(config):
 
     scl = await cg.gpio_pin_expression(config[CONF_LP_I2C][CONF_SCL])
     cg.add(var.set_lp_scl_pin(scl))
+    cg.add(var.set_sleep_duration(config[CONF_SLEEP_DURATION]))
+    cg.add(var.set_samples_per_conversion(config[CONF_SAMPLES]))
 
     if CONF_ACTIVITY_LED in config:
         if CONF_PIN in config[CONF_ACTIVITY_LED]:
@@ -301,9 +314,6 @@ async def to_code(config):
             cg.add(var.set_led_pin(pin))
         if CONF_INTERVAL in config[CONF_ACTIVITY_LED]:
             cg.add(var.set_led_interval(config[CONF_ACTIVITY_LED][CONF_INTERVAL]))
-
-    if CONF_SLEEP_DURATION in config:
-        cg.add(var.set_sleep_duration(config[CONF_SLEEP_DURATION]))
 
     for bus_idx, bus_config in enumerate(config[CONF_BUS]):
         for key, fn in BUS_CONFIG_ITEMS.items():

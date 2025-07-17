@@ -7,10 +7,34 @@
 
 static inline int32_t _ceilf(float x) { return (int32_t) (x + 0.999999f); }
 
+static uint16_t get_adc_settings(uint8_t samples_per_conversion) {
+  switch (samples_per_conversion) {
+    case 1:
+      return 0b1000;  // 12 bit
+    case 2:
+      return 0b1001;  // 2 samples
+    case 4:
+      return 0b1010;  // 4 samples
+    case 8:
+      return 0b1011;  // 8 samples
+    case 16:
+      return 0b1100;  // 16 samples
+    case 32:
+      return 0b1101;  // 32 samples
+    case 64:
+      return 0b1110;  // 64 samples
+    case 128:
+      return 0b1111;  // 128 samples
+    default:
+      return 0b1111;  // Default to 128 samples
+  }
+}
+
 esp_err_t ina219_power_down(uint8_t address) { return i2c_write16(address, INA219_REGISTER_CONFIG, 0x0); }
 
 esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float max_current,
-                      uint32_t calibration_register_override, uint32_t *calibration_register, uint32_t *current_lsb) {
+                      uint32_t calibration_register_override, uint32_t *calibration_register, uint32_t *current_lsb,
+                      uint8_t samples_per_conversion) {
   // Reset device
   esp_err_t ret = i2c_write16(address, INA219_REGISTER_CONFIG, 0x8000);
 
@@ -22,10 +46,13 @@ esp_err_t ina219_init(uint8_t address, float max_voltage, float r_shunt, float m
 
   // Continuous operation of Bus and Shunt ADCs
   uint16_t config = 0b0000000000000111;
-  // Bus ADC 12 bit+128 samples
-  config |= 0b0000011110000000;
-  // Shunt ADC 12 bit+128 samples
-  config |= 0b0000000001111000;
+  uint16_t adc_settings = get_adc_settings(samples_per_conversion);
+  // Bus ADC
+  // config |= 0b0000011110000000;
+  config |= adc_settings << 7;
+  // Shunt ADC
+  // config |= 0b0000000001111000;
+  config |= adc_settings << 3;
 
   // 16v range
   // For higher voltages, adc precision will halve

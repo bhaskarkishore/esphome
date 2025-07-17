@@ -81,6 +81,11 @@ class UlpIna219 : public Component {
     }
   }
 
+  void set_samples_per_conversion(uint8_t samples_per_conversion) {
+    ulp_ina219_context_t *ctx = get_ulp_context();
+    ctx->samples_per_conversion = samples_per_conversion;
+  }
+
   void set_alarm(uint8_t bus_idx, uint8_t alarm_idx, alarm_mode_enum_t mode, uint32_t debounce_ms, float above,
                  float below, float threshold);
 

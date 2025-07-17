@@ -9,6 +9,29 @@
 ulp_ina219_context_t ctx = {0};
 uint64_t start_ticks = 0;
 
+float get_conversion_time_ms(uint16_t samples_per_conversion) {
+  switch (samples_per_conversion) {
+    case 1:
+      return 0.532f;  // 12 bit, 532 μs
+    case 2:
+      return 1.06f;  // 2 samples, 1.06 ms
+    case 4:
+      return 2.13f;  // 4 samples, 2.13 ms
+    case 8:
+      return 4.26f;  // 8 samples, 4.26 ms
+    case 16:
+      return 8.51f;  // 16 samples, 8.51 ms
+    case 32:
+      return 17.02f;  // 32 samples, 17.02 ms
+    case 64:
+      return 34.05f;  // 64 samples, 34.05 ms
+    case 128:
+      return 68.10f;  // 128 samples, 68.10 ms
+    default:
+      return 68.10f;  // Default to 128 samples
+  }
+}
+
 static float clamp(float value, float threshold) { return fabs(value) <= threshold ? 0.f : value; }
 
 static void min_max(float value, volatile float *min, volatile float *max, uint32_t reset) {
@@ -189,7 +212,8 @@ static void init() {
     v->error_code = ESP_OK;
     if (c->address > 0) {
       ret = ina219_init(c->address, c->max_system_voltage, c->shunt_resistance, c->max_system_current,
-                        c->calibration_register_override, &calibration_register, &current_lsb);
+                        c->calibration_register_override, &calibration_register, &current_lsb,
+                        ctx.samples_per_conversion);
       if (ret == ESP_OK) {
         v->current_lsb = current_lsb;
         v->calibration_register = calibration_register;
@@ -202,6 +226,9 @@ static void init() {
 
 int main(void) {
   bool led_active = ctx.led.interval > 0 && ctx.led.pin > -1;
+  uint32_t conversion_sleep_wait_us = (get_conversion_time_ms(ctx.samples_per_conversion) + 1) * 1000;
+
+  // ctx.cycle_duration = (get_conversion_time_ms(ctx.samples_per_conversion) + 1) * 1000;
 
   // Skip init if the previous run cycle initiated a wait sleep.
   if (ctx.prg_state != PRG_STATE_WAIT_SLEEP) {
@@ -220,7 +247,7 @@ int main(void) {
     // to finish according as per the datasheet, we wait a little extra.
     // To save power, we put the ulp processor to sleep while we wait.
     ctx.prg_state = PRG_STATE_WAIT_SLEEP;
-    uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(SAMPLING_DELAY_WAIT_US);
+    uint64_t ticks = ulp_lp_core_lp_timer_calculate_sleep_ticks(conversion_sleep_wait_us);
     ulp_lp_core_lp_timer_set_wakeup_ticks(ticks);
     ulp_lp_core_halt();  // Execution stops here
   }
@@ -234,8 +261,8 @@ int main(void) {
     ulp_lp_core_gpio_set_level(ctx.led.pin, ctx.led.inverted ? 1 : 0);
   }
 
-  ctx.run_duration =
-      lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - start_ticks, ctx.slow_clk_period) - SAMPLING_DELAY_WAIT_US;
+  ctx.cycle_duration = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks() - start_ticks, ctx.slow_clk_period);
+  ctx.run_duration = ctx.cycle_duration - conversion_sleep_wait_us;
 
   ctx.prg_state = PRG_STATE_SLEEP;
   return 0;
