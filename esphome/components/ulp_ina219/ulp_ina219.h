@@ -81,8 +81,8 @@ class UlpIna219 : public Component {
     }
   }
 
-  void set_trigger(uint8_t bus_idx, uint8_t trg_idx, wake_trigger_mode_enum_t mode, uint32_t debounce_ms, float above,
-                   float below, float threshold);
+  void set_alarm(uint8_t bus_idx, uint8_t alarm_idx, alarm_mode_enum_t mode, uint32_t debounce_ms, float above,
+                 float below, float threshold);
 
   void set_led_pin(InternalGPIOPin *led_pin) { led_pin_ = led_pin; }
 

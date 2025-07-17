@@ -14,7 +14,7 @@ namespace ulp_ina219 {
 #include "soc/lp_timer_reg.h"  // NOLINT(clang-diagnostic-error)
 
 #define MAX_BUS (2)
-#define MAX_TRIGGERS (3)
+#define MAX_ALARMS (3)
 static const uint32_t SAMPLING_DELAY_WAIT_US = 75 * 1000;
 
 // The following code is shared between the ulp and hp cpus.
@@ -37,22 +37,22 @@ static uint64_t lp_core_rtc_ticks_to_us(uint64_t ticks, uint64_t period) {
 typedef enum { PRG_STATE_NONE = 0, PRG_STATE_RUN, PRG_STATE_SLEEP, PRG_STATE_WAIT_SLEEP } program_state_enum_t;
 
 typedef enum {
-  TRIG_MODE_NONE = 0,
-  TRIG_MODE_VOLTAGE,
-  TRIG_MODE_CURRENT,
-  TRIG_MODE_CHARGE_NET,
-  TRIG_MODE_CHARGE_IN,
-  TRIG_MODE_CHARGE_OUT,
-  TRIG_MODE_ENERGY_NET,
-  TRIG_MODE_ENERGY_IN,
-  TRIG_MODE_ENERGY_OUT,
-  TRIG_MODE_CHARGE_DELTA,
-  TRIG_MODE_ENERGY_DELTA
-} wake_trigger_mode_enum_t;
+  ALARM_MODE_NONE = 0,
+  ALARM_MODE_VOLTAGE,
+  ALARM_MODE_CURRENT,
+  ALARM_MODE_CHARGE_NET,
+  ALARM_MODE_CHARGE_IN,
+  ALARM_MODE_CHARGE_OUT,
+  ALARM_MODE_ENERGY_NET,
+  ALARM_MODE_ENERGY_IN,
+  ALARM_MODE_ENERGY_OUT,
+  ALARM_MODE_CHARGE_DELTA,
+  ALARM_MODE_ENERGY_DELTA
+} alarm_mode_enum_t;
 
-typedef enum { TRIG_NOT_SET = 0, TRIG_SET, TRIG_FIRED } wake_trigger_status_enum_t;
+typedef enum { ALARM_NOT_SET = 0, ALARM_SET, ALARM_FIRED } alarm_status_enum_t;
 
-typedef union WakeConditions {
+typedef union AlarmConditions {
   struct {
     float above;
     float below;
@@ -61,15 +61,15 @@ typedef union WakeConditions {
     float baseline;
     float threshold;
   } delta;
-} wake_trigger_conditions_t;
+} alarm_conditions_t;
 
-typedef struct WakeTrigger {
-  wake_trigger_mode_enum_t mode;
-  wake_trigger_status_enum_t status;
-  wake_trigger_conditions_t condition;
+typedef struct Alarm {
+  alarm_mode_enum_t mode;
+  alarm_status_enum_t status;
+  alarm_conditions_t condition;
   uint32_t last_fired_us;
   uint32_t debounce_us;
-} wake_trigger_t;
+} alarm_t;
 
 typedef struct ActivityLed {
   int8_t pin;
@@ -116,7 +116,7 @@ typedef volatile struct BusValues {
 typedef volatile struct Bus {
   bus_config_t config;
   bus_values_t values;
-  wake_trigger_t triggers[MAX_TRIGGERS];
+  alarm_t alarms[MAX_ALARMS];
 } bus_t;
 
 typedef volatile struct UlpIna219Context {
@@ -126,7 +126,7 @@ typedef volatile struct UlpIna219Context {
   uint32_t slow_clk_period;
   program_state_enum_t prg_state;
   bool main_cpu_awake;
-  bool triggers_enabled;
+  bool alarms_enabled;
 } ulp_ina219_context_t;
 
 // NOLINTEND(modernize-use-using)

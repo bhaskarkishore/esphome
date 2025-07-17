@@ -183,7 +183,7 @@ void UlpIna219::enable_ulp_wake_src() {
   esp_err_t ret = esp_sleep_enable_ulp_wakeup();
   if (ret == ESP_OK) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
-    ctx->triggers_enabled = true;
+    ctx->alarms_enabled = true;
   } else {
     ESP_LOGE(TAG, "triggers disabled, ulp wake en err: %d", ret);
   }
@@ -192,14 +192,14 @@ void UlpIna219::enable_ulp_wake_src() {
 void UlpIna219::reset_triggers(uint8_t bus_idx) {
   if (is_valid_bus(bus_idx)) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
-    volatile wake_trigger_t *t = ctx->buses[bus_idx].triggers;
+    volatile alarm_t *t = ctx->buses[bus_idx].alarms;
     uint64_t current_time = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), ctx->slow_clk_period);
 
-    for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
-      if (t[i].status != TRIG_NOT_SET) {
-        t[i].status = TRIG_SET;
+    for (uint8_t i = 0; i < MAX_ALARMS; ++i) {
+      if (t[i].status != ALARM_NOT_SET) {
+        t[i].status = ALARM_SET;
         t[i].last_fired_us = current_time;
-        if (t[i].mode == TRIG_MODE_CHARGE_DELTA || t[i].mode == TRIG_MODE_ENERGY_DELTA) {
+        if (t[i].mode == ALARM_MODE_CHARGE_DELTA || t[i].mode == ALARM_MODE_ENERGY_DELTA) {
           t[i].condition.delta.baseline = INFINITY;
         }
       }
@@ -207,26 +207,26 @@ void UlpIna219::reset_triggers(uint8_t bus_idx) {
   }
 }
 
-void UlpIna219::set_trigger(uint8_t bus_idx, uint8_t trg_idx, wake_trigger_mode_enum_t mode, uint32_t debounce_ms,
-                            float above, float below, float threshold) {
+void UlpIna219::set_alarm(uint8_t bus_idx, uint8_t alarm_idx, alarm_mode_enum_t mode, uint32_t debounce_ms, float above,
+                          float below, float threshold) {
   if (is_valid_bus(bus_idx) && this->ulp_program_load_status_ == ULP_PROGRAM_LOAD_COMPLETE) {
-    if (trg_idx < MAX_TRIGGERS) {
+    if (alarm_idx < MAX_ALARMS) {
       volatile ulp_ina219_context_t *ctx = get_ulp_context();
-      volatile wake_trigger_t *t = ctx->buses[bus_idx].triggers;
+      volatile alarm_t *t = ctx->buses[bus_idx].alarms;
 
-      ctx->triggers_enabled = true;
-      t[trg_idx].status = TRIG_SET;
-      t[trg_idx].mode = mode;
-      t[trg_idx].debounce_us = debounce_ms * 1000;
-      if (mode == TRIG_MODE_CHARGE_DELTA || mode == TRIG_MODE_ENERGY_DELTA) {
-        t[trg_idx].condition.delta.threshold = threshold;
-        t[trg_idx].condition.delta.baseline = INFINITY;
+      ctx->alarms_enabled = true;
+      t[alarm_idx].status = ALARM_SET;
+      t[alarm_idx].mode = mode;
+      t[alarm_idx].debounce_us = debounce_ms * 1000;
+      if (mode == ALARM_MODE_CHARGE_DELTA || mode == ALARM_MODE_ENERGY_DELTA) {
+        t[alarm_idx].condition.delta.threshold = threshold;
+        t[alarm_idx].condition.delta.baseline = INFINITY;
       } else {
-        t[trg_idx].condition.range.above = above;
-        t[trg_idx].condition.range.below = below;
+        t[alarm_idx].condition.range.above = above;
+        t[alarm_idx].condition.range.below = below;
       }
     } else {
-      ESP_LOGE(TAG, "Invalid trigger idx %u", trg_idx);
+      ESP_LOGE(TAG, "Invalid alarm idx %u", alarm_idx);
     }
   }
 }
@@ -320,7 +320,7 @@ void UlpIna219::dump_config() {
   for (uint8_t i = 0; i < MAX_BUS; ++i) {
     volatile ulp_ina219_context_t *ctx = get_ulp_context();
     volatile bus_config_t *c = &ctx->buses[i].config;
-    volatile wake_trigger_t *t = ctx->buses[i].triggers;
+    volatile alarm_t *t = ctx->buses[i].alarms;
     if (c->address > 0) {
       ESP_LOGCONFIG(TAG,
                     "  Bus %u:\n"

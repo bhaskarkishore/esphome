@@ -6,7 +6,6 @@ from esphome.const import (
     CONF_BELOW,
     CONF_CURRENT,
     CONF_DEBOUNCE,
-    CONF_ID,
     CONF_MODE,
     CONF_THRESHOLD,
     CONF_VOLTAGE,
@@ -14,6 +13,7 @@ from esphome.const import (
 
 from .. import UlpIna219Component, ulp_ina219_ns
 from ..const import (
+    CONF_ALARM_INDEX,
     CONF_BUS,
     CONF_CHARGE_DELTA,
     CONF_CHARGE_IN,
@@ -29,8 +29,11 @@ from ..const import (
 DEPENDENCIES = ["ulp_ina219"]
 CODEOWNERS = ["@bhaskarkishore"]
 
+
 UlpIna219TextSensor = ulp_ina219_ns.class_(
-    "UlpIna219TextSensor", text_sensor.TextSensor, cg.Component
+    "UlpIna219TextSensor",
+    text_sensor.TextSensor,
+    cg.PollingComponent,
 )
 
 
@@ -77,6 +80,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(): cv.declare_id(UlpIna219TextSensor),
             cv.GenerateID(CONF_ULP_INA219_ID): cv.use_id(UlpIna219Component),
             cv.Required(CONF_BUS): cv.All(cv.uint8_t, cv.Range(min=0, max=1)),
+            cv.Required(CONF_ALARM_INDEX): cv.All(cv.uint8_t, cv.Range(min=0, max=3)),
             cv.Required(CONF_MODE): cv.one_of(*ALARM_MODES.keys(), lower=True),
             cv.Optional(CONF_ABOVE): cv.float_,
             cv.Optional(CONF_BELOW): cv.float_,
@@ -86,27 +90,25 @@ CONFIG_SCHEMA = cv.All(
             ): cv.positive_time_period_milliseconds,
         }
     )
-    .extend(cv.COMPONENT_SCHEMA),
+    .extend(cv.polling_component_schema("1s")),
     validate_alarm,
 )
 
 
 async def to_code(config):
     print(f"CONFIG: {config}")
-    var = cg.new_Pvariable(config[CONF_ID])
+    var = await text_sensor.new_text_sensor(config)
     await cg.register_component(var, config)
     await cg.register_parented(var, config[CONF_ULP_INA219_ID])
-
-    # paren = await cg.get_variable(config[CONF_TUYA_ID])
 
     mode = ALARM_MODES[config[CONF_MODE]]
     above = config.get(CONF_ABOVE, cg.RawExpression("INFINITY"))
     below = config.get(CONF_BELOW, cg.RawExpression("-INFINITY"))
     threshold = config.get(CONF_THRESHOLD, cg.RawExpression("INFINITY"))
     cg.add(
-        var.set_trigger(
+        var.set_alarm(
             config[CONF_BUS],
-            0,  # trg_idx,
+            config[CONF_ALARM_INDEX],
             getattr(ulp_ina219_ns, mode),
             config[CONF_DEBOUNCE],
             above,

@@ -10,7 +10,7 @@
 namespace esphome {
 namespace ulp_ina219 {
 
-class UlpIna219Sensor : public PollingComponent : public Parented<UlpIna219> {
+class UlpIna219Sensor : public PollingComponent, public Parented<UlpIna219> {
  public:
   void setup() override;
   void update() override;

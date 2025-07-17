@@ -71,55 +71,55 @@ static void accumulate(volatile const bus_config_t *c, volatile bus_values_t *v,
 }
 
 static void check_triggers(uint8_t bus_idx) {
-  volatile wake_trigger_t *t = ctx.buses[bus_idx].triggers;
+  volatile alarm_t *t = ctx.buses[bus_idx].alarms;
   volatile bus_values_t *v = &ctx.buses[bus_idx].values;
 
-  for (uint8_t i = 0; i < MAX_TRIGGERS; ++i) {
+  for (uint8_t i = 0; i < MAX_ALARMS; ++i) {
     bool triggered = false;
 
-    if (t[i].status == TRIG_SET) {
-      volatile wake_trigger_conditions_t *cond = &t[i].condition;
+    if (t[i].status == ALARM_SET) {
+      volatile alarm_conditions_t *cond = &t[i].condition;
 
       switch (t[i].mode) {
-        case TRIG_MODE_VOLTAGE:
+        case ALARM_MODE_VOLTAGE:
           triggered = (v->voltage > cond->range.above || v->voltage < cond->range.below);
           break;
-        case TRIG_MODE_CURRENT:
+        case ALARM_MODE_CURRENT:
           triggered = (v->current > cond->range.above || v->current < cond->range.below);
           break;
-        case TRIG_MODE_CHARGE_NET:
+        case ALARM_MODE_CHARGE_NET:
           triggered = (v->charge_net > cond->range.above || v->charge_net < cond->range.below);
           break;
-        case TRIG_MODE_CHARGE_IN:
+        case ALARM_MODE_CHARGE_IN:
           triggered = (v->charge_in > cond->range.above || v->charge_in < cond->range.below);
           break;
-        case TRIG_MODE_CHARGE_OUT:
+        case ALARM_MODE_CHARGE_OUT:
           triggered = (v->charge_out > cond->range.above || v->charge_out < cond->range.below);
           break;
-        case TRIG_MODE_ENERGY_NET:
+        case ALARM_MODE_ENERGY_NET:
           triggered = (v->energy_net > cond->range.above || v->energy_net < cond->range.below);
           break;
-        case TRIG_MODE_ENERGY_IN:
+        case ALARM_MODE_ENERGY_IN:
           triggered = (v->energy_in > cond->range.above || v->energy_in < cond->range.below);
           break;
-        case TRIG_MODE_ENERGY_OUT:
+        case ALARM_MODE_ENERGY_OUT:
           triggered = (v->energy_out > cond->range.above || v->energy_out < cond->range.below);
           break;
-        case TRIG_MODE_CHARGE_DELTA:
+        case ALARM_MODE_CHARGE_DELTA:
           if (cond->delta.baseline == INFINITY) {
             cond->delta.baseline = v->charge_net;
           } else {
             triggered = (fabs(v->charge_net - cond->delta.baseline) > cond->delta.threshold);
           }
           break;
-        case TRIG_MODE_ENERGY_DELTA:
+        case ALARM_MODE_ENERGY_DELTA:
           if (cond->delta.baseline == INFINITY) {
             cond->delta.baseline = v->energy_net;
           } else {
             triggered = (fabs(v->energy_net - cond->delta.baseline) > cond->delta.threshold);
           }
           break;
-        case TRIG_MODE_NONE:
+        case ALARM_MODE_NONE:
           break;
         default:
           break;
@@ -128,7 +128,7 @@ static void check_triggers(uint8_t bus_idx) {
       if (triggered && !ctx.main_cpu_awake) {
         uint64_t current_time_us = lp_core_rtc_ticks_to_us(lp_core_get_rtc_ticks(), ctx.slow_clk_period);
         if ((current_time_us - t[i].last_fired_us) > t[i].debounce_us) {
-          t[i].status = TRIG_FIRED;
+          t[i].status = ALARM_FIRED;
           t[i].last_fired_us = current_time_us;
           ulp_lp_core_wakeup_main_processor();
           return;
@@ -169,8 +169,8 @@ static void update() {
       // Power down
       ina219_power_down(c->address);
 
-      // Check triggers
-      if (ctx.triggers_enabled) {
+      // Check alarms
+      if (ctx.alarms_enabled) {
         check_triggers(i);
       }
     }
